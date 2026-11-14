@@ -266,7 +266,12 @@ function render() {
   $('#settings').hidden = !isSettings;
   $('#list').hidden = isSettings;
   $('#quickAdd').hidden = isSettings || view === 'done';
-  if (isSettings) { renderSettings(); return; }
+  if (isSettings) {
+    // 入力途中の内容を消さないよう、設定画面は開いたときに一度だけ描画する
+    if (!$('#settings').hasChildNodes()) renderSettings();
+    return;
+  }
+  $('#settings').innerHTML = '';
 
   const groups = groupsForView(view).filter(g => g.items.length);
   if (!groups.length) {
@@ -401,6 +406,10 @@ function closeEditor() {
 
 /* ---------- 同期（Google Apps Script） ---------- */
 async function api(body, config = state.config) {
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(config.apiUrl)) {
+    throw new Error('URLの形式が違います（https://script.google.com/macros/s/…/exec）');
+  }
+  if (!config.token) throw new Error('トークンが入力されていません');
   // text/plain で送ると CORS のプリフライトが発生せず、GAS で受け取れる
   const res = await fetch(config.apiUrl, {
     method: 'POST',

@@ -1,6 +1,6 @@
 // オフラインでも画面を開けるようにするための Service Worker
 // アプリを更新したら VERSION の数字を上げる
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'taskapp-' + VERSION;
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png'];
 
