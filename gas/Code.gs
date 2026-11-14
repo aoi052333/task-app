@@ -3,6 +3,8 @@
  *
  * 役割:
  *   - Webアプリから送られたタスクを Google スプレッドシートに保存し、全件を返す（Mac ⇄ iPhone 同期）
+ *   - 期限のあるタスクを Google カレンダーの「タスク」カレンダーに登録する（通知ONならリマインダー付き）
+ *   - Google カレンダーの予定（今日から2週間分）をアプリに返す
  *
  * 初回だけやること:
  *   1. エディタ上部の関数選択で「setup」を選んで ▶ 実行（権限の確認が出たら許可）
@@ -11,11 +13,19 @@
  *        次のユーザーとして実行: 自分
  *        アクセスできるユーザー: 全員
  *      → 表示された URL とトークンを、アプリの「設定」に入力
+ *
+ * コードを更新したとき:
+ *   1. 「setup」を ▶ 実行（新しい権限が必要なら許可）
+ *   2. デプロイ → デプロイを管理 → 鉛筆アイコン → バージョン「新バージョン」→ デプロイ
  */
 
 const SHEET_NAME = 'tasks';
+const HEADER = ['id', 'updatedAt', 'json', 'eventId', 'eventSig'];
+const TASK_CALENDAR_NAME = 'タスク';
+const EVENT_DAYS = 15;          // 何日先までの予定を返すか
+const EVENT_CACHE_SECONDS = 300; // 予定の一時保存時間（5分）
 
-/** 初期設定: 保存用スプレッドシートと合言葉（トークン）を作る */
+/** 初期設定: 保存用スプレッドシート・合言葉（トークン）・タスク用カレンダーを用意する */
 function setup() {
   const props = PropertiesService.getScriptProperties();
   let ssId = props.getProperty('SPREADSHEET_ID');
@@ -23,17 +33,21 @@ function setup() {
     const ss = SpreadsheetApp.create('タスク管理アプリ データ');
     const sheet = ss.getSheets()[0];
     sheet.setName(SHEET_NAME);
-    sheet.appendRow(['id', 'updatedAt', 'json']);
     sheet.setFrozenRows(1);
     ssId = ss.getId();
     props.setProperty('SPREADSHEET_ID', ssId);
   }
+  getSheet().getRange(1, 1, 1, HEADER.length).setValues([HEADER]);
+
   let token = props.getProperty('TOKEN');
   if (!token) {
     token = Utilities.getUuid().replace(/-/g, '');
     props.setProperty('TOKEN', token);
   }
+
+  const cal = getTaskCalendar();
   Logger.log('スプレッドシート: https://docs.google.com/spreadsheets/d/' + ssId);
+  Logger.log('タスク用カレンダー: ' + cal.getName());
   Logger.log('トークン（アプリの設定に入力）: ' + token);
 }
 
@@ -44,8 +58,7 @@ function doPost(e) {
   } catch (err) {
     return json({ ok: false, error: '不正なリクエスト' });
   }
-  const props = PropertiesService.getScriptProperties();
-  const token = props.getProperty('TOKEN');
+  const token = PropertiesService.getScriptProperties().getProperty('TOKEN');
   if (!token || body.token !== token) {
     return json({ ok: false, error: 'トークンが違います' });
   }
@@ -54,8 +67,15 @@ function doPost(e) {
     switch (body.action) {
       case 'ping':
         return json({ ok: true });
-      case 'sync':
-        return json({ ok: true, tasks: syncTasks(body.changes || []) });
+      case 'sync': {
+        const result = { ok: true, tasks: syncTasks(body.changes || []) };
+        try {
+          result.events = getEvents();
+        } catch (err) {
+          result.eventsError = String(err && err.message || err);
+        }
+        return json(result);
+      }
       default:
         return json({ ok: false, error: '不明な action: ' + body.action });
     }
@@ -68,16 +88,20 @@ function doGet() {
   return json({ ok: true, message: 'タスク管理アプリ API は動いています' });
 }
 
+/* =========================================================
+   タスクの保存と同期
+   ========================================================= */
+
 /**
  * 受け取った変更を保存し、全タスクを返す。
  * 同じタスクが両端末で編集された場合は、updatedAt が新しい方を採用する。
  */
 function syncTasks(changes) {
   const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
+  lock.waitLock(25000);
   try {
     const sheet = getSheet();
-    const rows = readRows(sheet);
+    let rows = readRows(sheet);
     const index = {};
     rows.forEach(function (r, i) { index[r.id] = i; });
 
@@ -86,15 +110,31 @@ function syncTasks(changes) {
       const i = index[task.id];
       if (i === undefined) {
         index[task.id] = rows.length;
-        rows.push({ id: task.id, updatedAt: task.updatedAt, task: task, dirty: true });
+        rows.push({ id: task.id, updatedAt: task.updatedAt, task: task, eventId: '', eventSig: '', dirty: true });
       } else if (String(task.updatedAt) >= String(rows[i].updatedAt)) {
-        rows[i] = { id: task.id, updatedAt: task.updatedAt, task: task, dirty: true };
+        rows[i].updatedAt = task.updatedAt;
+        rows[i].task = task;
+        rows[i].dirty = true;
       }
     });
 
-    writeRows(sheet, rows);
-    purgeOldDeleted(sheet);
+    // カレンダーへの反映（初回はすべてのタスクを対象にする）
+    const props = PropertiesService.getScriptProperties();
+    const fullSync = props.getProperty('CALENDAR_SYNCED') !== '1';
+    const cal = getTaskCalendar();
+    rows.forEach(function (r) {
+      if (fullSync || r.dirty) syncEvent(cal, r);
+    });
+    if (fullSync) props.setProperty('CALENDAR_SYNCED', '1');
 
+    // 削除から30日以上たったタスクは完全に消す（シートの肥大化防止）
+    const limit = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    const before = rows.length;
+    rows = rows.filter(function (r) { return !(r.task.deleted && r.updatedAt < limit); });
+
+    if (rows.length !== before || rows.some(function (r) { return r.dirty; })) {
+      writeRows(sheet, rows);
+    }
     return rows.map(function (r) { return r.task; });
   } finally {
     lock.releaseLock();
@@ -110,37 +150,125 @@ function getSheet() {
 function readRows(sheet) {
   const last = sheet.getLastRow();
   if (last < 2) return [];
-  return sheet.getRange(2, 1, last - 1, 3).getValues()
+  return sheet.getRange(2, 1, last - 1, HEADER.length).getValues()
     .filter(function (v) { return v[0]; })
     .map(function (v) {
-      return { id: String(v[0]), updatedAt: String(v[1]), task: JSON.parse(v[2]) };
+      return {
+        id: String(v[0]), updatedAt: String(v[1]), task: JSON.parse(v[2]),
+        eventId: String(v[3] || ''), eventSig: String(v[4] || ''), dirty: false,
+      };
     });
 }
 
 function writeRows(sheet, rows) {
-  if (!rows.some(function (r) { return r.dirty; })) return;
-  const values = rows.map(function (r) {
-    return [r.id, r.updatedAt, JSON.stringify(r.task)];
-  });
   const last = sheet.getLastRow();
-  if (last > 1) sheet.getRange(2, 1, last - 1, 3).clearContent();
-  if (values.length) sheet.getRange(2, 1, values.length, 3).setValues(values);
+  if (last > 1) sheet.getRange(2, 1, last - 1, HEADER.length).clearContent();
+  if (!rows.length) return;
+  sheet.getRange(2, 1, rows.length, HEADER.length).setValues(rows.map(function (r) {
+    return [r.id, r.updatedAt, JSON.stringify(r.task), r.eventId, r.eventSig];
+  }));
 }
 
-/** 削除から30日以上たったタスクを完全に消す（シートの肥大化防止） */
-function purgeOldDeleted(sheet) {
-  const rows = readRows(sheet);
-  const limit = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-  const kept = rows.filter(function (r) { return !(r.task.deleted && r.updatedAt < limit); });
-  if (kept.length === rows.length) return;
-  kept.forEach(function (r) { r.dirty = true; });
-  const last = sheet.getLastRow();
-  sheet.getRange(2, 1, last - 1, 3).clearContent();
-  if (kept.length) {
-    sheet.getRange(2, 1, kept.length, 3).setValues(kept.map(function (r) {
-      return [r.id, r.updatedAt, JSON.stringify(r.task)];
-    }));
+/* =========================================================
+   Google カレンダー連携
+   ========================================================= */
+
+/** タスク用カレンダー（なければ作る） */
+function getTaskCalendar() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('TASK_CALENDAR_ID');
+  let cal = id ? CalendarApp.getCalendarById(id) : null;
+  if (!cal) {
+    cal = CalendarApp.createCalendar(TASK_CALENDAR_NAME, {
+      color: CalendarApp.Color.BLUE,
+      summary: 'タスク管理アプリが期限付きのタスクを自動で登録するカレンダー',
+    });
+    props.setProperty('TASK_CALENDAR_ID', cal.getId());
   }
+  return cal;
+}
+
+/**
+ * タスク1件をカレンダーに反映する。
+ *   - 未完了で期限あり → 予定を作る（内容が変わったら作り直す）
+ *   - 完了・削除・期限なし → 予定を消す
+ * 予定の種類:
+ *   - 時刻あり         → その時刻から30分の予定
+ *   - 時刻なし・通知ON → 当日9:00から15分の予定（9:00に通知）
+ *   - 時刻なし・通知OFF→ 終日の予定
+ */
+function syncEvent(cal, row) {
+  const t = row.task;
+  const want = !t.deleted && !t.done && !!t.due;
+  const sig = want ? JSON.stringify([t.title, t.notes, t.due, t.dueTime, !!t.notify]) : '';
+  if (sig === row.eventSig && (!want || row.eventId)) return;
+
+  if (row.eventId) {
+    try {
+      const old = cal.getEventById(row.eventId);
+      if (old) old.deleteEvent();
+    } catch (err) { /* すでに手動で消されている場合など */ }
+    row.eventId = '';
+  }
+  if (want) {
+    row.eventId = createEvent(cal, t).getId();
+  }
+  row.eventSig = sig;
+  row.dirty = true;
+}
+
+function createEvent(cal, t) {
+  const p = t.due.split('-').map(Number);
+  const desc = (t.notes ? t.notes + '\n\n' : '') + '（タスク管理アプリから自動登録）';
+  let ev;
+  if (t.dueTime || t.notify) {
+    const hm = (t.dueTime || '09:00').split(':').map(Number);
+    const start = new Date(p[0], p[1] - 1, p[2], hm[0], hm[1]);
+    const minutes = t.dueTime ? 30 : 15;
+    ev = cal.createEvent(t.title, start, new Date(start.getTime() + minutes * 60000), { description: desc });
+  } else {
+    ev = cal.createAllDayEvent(t.title, new Date(p[0], p[1] - 1, p[2]), { description: desc });
+  }
+  ev.removeAllReminders();
+  if (t.notify) ev.addPopupReminder(0);
+  return ev;
+}
+
+/** 表示中のカレンダーの予定（今日から EVENT_DAYS 日分）。タスク用カレンダーは除く */
+function getEvents() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('events');
+  if (cached) return JSON.parse(cached);
+
+  const tz = Session.getScriptTimeZone();
+  const taskCalId = PropertiesService.getScriptProperties().getProperty('TASK_CALENDAR_ID');
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start.getTime() + EVENT_DAYS * 24 * 3600 * 1000);
+  const fmt = function (d, pattern) { return Utilities.formatDate(d, tz, pattern); };
+
+  const events = [];
+  CalendarApp.getAllCalendars().forEach(function (cal) {
+    if (cal.getId() === taskCalId || cal.isHidden() || !cal.isSelected()) return;
+    cal.getEvents(start, end).forEach(function (ev) {
+      const allDay = ev.isAllDayEvent();
+      const s = allDay ? ev.getAllDayStartDate() : ev.getStartTime();
+      const e = allDay ? ev.getAllDayEndDate() : ev.getEndTime();
+      events.push({
+        id: ev.getId() + '_' + s.getTime(),
+        title: ev.getTitle() || '(タイトルなし)',
+        allDay: allDay,
+        start: fmt(s, allDay ? 'yyyy-MM-dd' : "yyyy-MM-dd'T'HH:mm"),
+        end: fmt(e, allDay ? 'yyyy-MM-dd' : "yyyy-MM-dd'T'HH:mm"),
+        calendar: cal.getName(),
+        color: cal.getColor(),
+      });
+    });
+  });
+  events.sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : 0; });
+
+  try { cache.put('events', JSON.stringify(events), EVENT_CACHE_SECONDS); } catch (err) { /* 大きすぎる場合は保存しない */ }
+  return events;
 }
 
 function json(obj) {

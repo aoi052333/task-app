@@ -11,6 +11,7 @@ const LS = {
   pending: 'taskapp.pending',
   config: 'taskapp.config',
   view: 'taskapp.view',
+  events: 'taskapp.events',
 };
 
 const PRIORITY_LABEL = { 1: '低', 2: '中', 3: '高' };
@@ -22,6 +23,8 @@ const state = {
   pending: load(LS.pending, []), // サーバーへ未送信の変更
   config: load(LS.config, { apiUrl: '', token: '' }),
   view: load(LS.view, 'today'),
+  events: load(LS.events, []), // Google カレンダーの予定
+  eventsError: null,
   editingId: null,
   syncing: false,
   lastSync: null,
@@ -198,22 +201,39 @@ function sortTasks(list) {
     a.createdAt.localeCompare(b.createdAt));
 }
 
+/* ---------- カレンダーの予定 ---------- */
+// 予定が表示される日付の一覧（終日の複数日予定は各日に出す）
+function eventDays(ev) {
+  if (!ev.allDay) return [ev.start.slice(0, 10)];
+  const days = [];
+  for (let d = ev.start; d < ev.end && days.length < 31; d = addDays(d, 1)) days.push(d);
+  return days.length ? days : [ev.start];
+}
+function eventsOn(date) {
+  return state.events
+    .filter(ev => eventDays(ev).includes(date))
+    .sort((a, b) => (b.allDay - a.allDay) || a.start.localeCompare(b.start))
+    .map(ev => ({ ...ev, kind: 'event' }));
+}
+
 function groupsForView(view) {
   const t = today();
   if (view === 'today') {
     const list = open().filter(x => x.due && x.due <= t);
     return [
+      { title: '今日の予定', items: eventsOn(t) },
       { title: '期限切れ', cls: 'overdue', items: sortTasks(list.filter(x => x.due < t)) },
-      { title: '今日', items: sortTasks(list.filter(x => x.due === t)) },
+      { title: '今日のタスク', items: sortTasks(list.filter(x => x.due === t)) },
     ];
   }
   if (view === 'upcoming') {
-    const map = new Map();
-    for (const x of sortTasks(open().filter(x => x.due && x.due > t))) {
-      if (!map.has(x.due)) map.set(x.due, []);
-      map.get(x.due).push(x);
-    }
-    return [...map].map(([due, items]) => ({ title: formatDue(due), items }));
+    // 明日以降の「予定」と「期限付きタスク」を日付ごとにまとめる
+    const dates = new Set(open().filter(x => x.due && x.due > t).map(x => x.due));
+    for (const ev of state.events) for (const d of eventDays(ev)) if (d > t) dates.add(d);
+    return [...dates].sort().map(d => ({
+      title: formatDue(d),
+      items: [...eventsOn(d), ...sortTasks(open().filter(x => x.due === d))],
+    }));
   }
   if (view === 'all') {
     const list = sortTasks(open());
@@ -280,8 +300,19 @@ function render() {
   }
   $('#list').innerHTML = groups.map(g => `
     ${g.title ? `<div class="group-title ${g.cls || ''}">${esc(g.title)}</div>` : ''}
-    ${g.items.map(taskHtml).join('')}
+    ${g.items.map(x => x.kind === 'event' ? eventHtml(x) : taskHtml(x)).join('')}
   `).join('');
+}
+
+function eventHtml(ev) {
+  const time = ev.allDay ? '終日' : `${ev.start.slice(11, 16)}–${ev.end.slice(11, 16)}`;
+  return `
+    <div class="event">
+      <span class="event-dot" style="background:${esc(ev.color || 'var(--accent)')}"></span>
+      <span class="event-time">${esc(time)}</span>
+      <span class="event-title">${esc(ev.title)}</span>
+      <span class="event-cal">${esc(ev.calendar)}</span>
+    </div>`;
 }
 
 function taskHtml(x) {
@@ -323,7 +354,8 @@ function renderSyncStatus() {
   if (!state.config.apiUrl) { el.textContent = '端末内のみ保存（同期オフ）'; return; }
   if (state.syncing) { el.textContent = '同期中…'; return; }
   if (state.syncError) { el.textContent = '⚠︎ 同期エラー: ' + state.syncError; return; }
-  const pend = state.pending.length ? `・未送信 ${state.pending.length}件` : '';
+  const pend = (state.pending.length ? `・未送信 ${state.pending.length}件` : '') +
+    (state.eventsError ? '・予定の取得に失敗' : '');
   el.textContent = state.lastSync
     ? `同期済み ${state.lastSync.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}${pend}`
     : `未同期${pend}`;
@@ -445,6 +477,11 @@ async function sync() {
     const merged = res.tasks.map(t => pendingMap.get(t.id) || t);
     for (const p of state.pending) if (!res.tasks.some(t => t.id === p.id)) merged.push(p);
     state.tasks = merged;
+    if (Array.isArray(res.events)) {
+      state.events = res.events;
+      save(LS.events, state.events);
+    }
+    state.eventsError = res.eventsError || null;
     state.lastSync = new Date();
     state.syncError = null;
     persist();
