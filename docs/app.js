@@ -65,7 +65,32 @@ const ICONS = {
   right: '<path d="m9 18 6-6-6-6"/>',
   flag: '<path d="M4 22V4M4 4h13l-2 4 2 4H4"/>',
   alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  auto: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
 };
+
+/* ---------- 配色（ライト／ダーク／自動） ---------- */
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+function getTheme() {
+  try { return localStorage.getItem('taskapp.theme') || 'auto'; } catch { return 'auto'; }
+}
+function applyTheme(mode, animate) {
+  const root = document.documentElement;
+  if (animate) {
+    root.classList.add('theme-anim');
+    setTimeout(() => root.classList.remove('theme-anim'), 350);
+  }
+  if (mode === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
+  const dark = mode === 'dark' || (mode === 'auto' && darkQuery.matches);
+  $('#themeColor')?.setAttribute('content', dark ? '#121318' : '#f4f5fb');
+  document.querySelectorAll('[data-theme-set]').forEach(b => b.classList.toggle('on', b.dataset.themeSet === mode));
+}
+function setTheme(mode) {
+  try { localStorage.setItem('taskapp.theme', mode); } catch { /* 保存できなくても表示は切り替える */ }
+  applyTheme(mode, true);
+}
+// 「自動」のときは端末の設定が変わったら追従する
+darkQuery.addEventListener?.('change', () => { if (getTheme() === 'auto') applyTheme('auto'); });
 function icon(name) {
   return `<span data-icon="${name}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg></span>`;
 }
@@ -592,6 +617,16 @@ function renderSettings() {
     </div>
 
     <div class="set-card">
+      <h3>配色</h3>
+      <p>「自動」は Mac・iPhone の設定（ライト／ダーク）に合わせて切り替わります。</p>
+      <div class="theme-switch" role="radiogroup" aria-label="配色">
+        <button data-theme-set="light">${icon('sun')}ライト</button>
+        <button data-theme-set="dark">${icon('moon')}ダーク</button>
+        <button data-theme-set="auto">${icon('auto')}自動</button>
+      </div>
+    </div>
+
+    <div class="set-card">
       <h3>バックアップ</h3>
       <p>すべてのタスクを JSON ファイルとして書き出します。</p>
       <div class="btn-row"><button class="btn ghost" id="exportBtn">書き出す</button></div>
@@ -617,6 +652,7 @@ function renderSettings() {
         対象にしたくないメールは、Gmail で「<b>返信不要</b>」というラベルを付けると除外されます。
       </p>
     </div>`;
+  applyTheme(getTheme()); // 配色ボタンの選択状態を反映
   $('#cfgSave').onclick = () => {
     state.config = { apiUrl: $('#cfgUrl').value.trim(), token: $('#cfgToken').value.trim() };
     save(LS.config, state.config);
@@ -806,6 +842,8 @@ const closeDrawer = () => $('#nav').classList.remove('open');
 
 document.addEventListener('click', e => {
   if (swipe.active) return;
+  const th = e.target.closest('[data-theme-set]');
+  if (th) { setTheme(th.dataset.themeSet); return; }
   const nav = e.target.closest('[data-view]');
   if (nav) { setView(nav.dataset.view); return; }
   const go = e.target.closest('[data-goto]');
@@ -1007,5 +1045,6 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 
 fillIcons();
+applyTheme(getTheme());
 render();
 sync();

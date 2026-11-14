@@ -3,8 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f4f5fb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#121318" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" id="themeColor" content="#f4f5fb">
+  <script>
+    // 画面のちらつきを防ぐため、表示前にテーマ（ライト／ダーク）を適用する
+    (function () {
+      var mode = 'auto';
+      try { mode = localStorage.getItem('taskapp.theme') || 'auto'; } catch (e) {}
+      var dark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (mode !== 'auto') document.documentElement.setAttribute('data-theme', mode);
+      document.getElementById('themeColor').setAttribute('content', dark ? '#121318' : '#f4f5fb');
+    })();
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="タスク">
@@ -35,6 +44,11 @@
       <div class="nav-section">タグ</div>
       <div id="tagList"></div>
       <div class="nav-footer">
+        <div class="theme-switch" role="radiogroup" aria-label="配色">
+          <button data-theme-set="light" aria-label="ライト"><span data-icon="sun"></span>ライト</button>
+          <button data-theme-set="dark" aria-label="ダーク"><span data-icon="moon"></span>ダーク</button>
+          <button data-theme-set="auto" aria-label="自動"><span data-icon="auto"></span>自動</button>
+        </div>
         <button class="nav-item" data-view="settings"><span class="ico" data-icon="sliders"></span><span>設定</span></button>
         <div class="sync-status" id="syncStatus"></div>
       </div>
