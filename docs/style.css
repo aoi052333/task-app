@@ -599,3 +599,5 @@ kbd {
   .sheet-grabber { display: block; width: 38px; height: 5px; border-radius: 999px; background: var(--line); margin: 8px auto -6px; flex-shrink: 0; }
   .sheet-head { padding-top: 10px; }
 }
+
+.btn.ghost.danger { color: var(--danger); }

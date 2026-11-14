@@ -693,6 +693,15 @@ function renderSettings() {
     </div>
 
     <div class="set-card">
+      <h3>テストデータ</h3>
+      <p>動作確認用のタスク（今週〜来週の予定・優先度・プロジェクト・繰り返しなど約15件）を追加します。すべてに「@テスト」タグが付き、「削除」でまとめて消せます。<br>※ 期限のあるテストタスクは Google カレンダーの「タスク」カレンダーにも登録されます（削除すると消えます）。通知はオフです。</p>
+      <div class="btn-row">
+        <button class="btn ghost" id="addTestBtn">テストデータを追加</button>
+        <button class="btn ghost danger" id="delTestBtn">テストデータを削除</button>
+      </div>
+    </div>
+
+    <div class="set-card">
       <h3>バックアップ</h3>
       <p>すべてのタスクを JSON ファイルとして書き出します。</p>
       <div class="btn-row"><button class="btn ghost" id="exportBtn">書き出す</button></div>
@@ -736,6 +745,14 @@ function renderSettings() {
       toast(res.ok ? '接続OK' : '失敗: ' + res.error);
     } catch (e) { toast('接続できません: ' + e.message); }
   };
+  $('#addTestBtn').onclick = () => {
+    const n = addTestData();
+    toast(`テストデータを${n}件追加しました`);
+  };
+  $('#delTestBtn').onclick = () => {
+    const n = removeTestData();
+    toast(n ? `テストデータを${n}件削除しました` : 'テストデータはありません');
+  };
   $('#exportBtn').onclick = () => {
     const blob = new Blob([JSON.stringify(live(), null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -744,6 +761,42 @@ function renderSettings() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
+}
+
+/* ---------- テストデータ ---------- */
+const TEST_TAG = 'テスト';
+function addTestData() {
+  const t = today();
+  const d = n => addDays(t, n);
+  const samples = [
+    { title: '企画書のドラフトを作る', due: d(0), dueTime: '10:00', priority: 3, project: '仕事', notes: '構成案と予算の概算まで' },
+    { title: '週次ミーティングの資料準備', due: d(0), dueTime: '14:00', priority: 2, project: '仕事' },
+    { title: '経費精算を提出', due: d(-1), priority: 2, project: '仕事' },
+    { title: '請求書の確認', due: d(-2), priority: 1, project: '仕事' },
+    { title: '朝のストレッチ', due: d(0), repeat: 'daily', project: '健康' },
+    { title: 'ジムに行く', due: d(1), dueTime: '19:00', repeat: 'weekly', project: '健康' },
+    { title: '取引先へ見積もりを送る', due: d(1), dueTime: '11:00', priority: 3, project: '仕事', tags: ['メール'] },
+    { title: '歯医者の予約を取る', due: d(2), priority: 1, project: 'プライベート', tags: ['電話'] },
+    { title: '牛乳と卵を買う', due: d(2), project: 'プライベート', tags: ['買い物'] },
+    { title: 'プレゼンのリハーサル', due: d(3), dueTime: '16:00', priority: 2, project: '仕事' },
+    { title: '友人の誕生日プレゼントを選ぶ', due: d(5), priority: 2, project: 'プライベート', tags: ['買い物'] },
+    { title: '月次レポート作成', due: d(7), dueTime: '09:30', priority: 3, project: '仕事', repeat: 'monthly' },
+    { title: '本を返却する', due: d(9), project: 'プライベート' },
+    { title: '読みたい本リストを整理', priority: 1, project: 'プライベート' },
+    { title: '新しいアプリのアイデアを書き出す', project: '趣味', notes: '思いついたらここにメモ' },
+  ];
+  const tasks = samples.map(s => newTask({ ...s, tags: [...(s.tags || []), TEST_TAG], notify: false }));
+  // 完了済みのサンプルも1件（今日の達成率の表示確認用）
+  tasks.push(newTask({ title: 'メールの受信箱を整理', due: t, project: '仕事', tags: [TEST_TAG], done: true, doneAt: new Date().toISOString() }));
+  tasks.forEach(x => upsertTask(x, { quiet: true }));
+  render();
+  return tasks.length;
+}
+function removeTestData() {
+  const targets = live().filter(x => (x.tags || []).includes(TEST_TAG));
+  targets.forEach(x => upsertTask({ ...x, deleted: true }, { quiet: true }));
+  render();
+  return targets.length;
 }
 
 /* ---------- 編集シート ---------- */
