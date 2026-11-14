@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#2f6fed">
+  <meta name="theme-color" content="#f4f5fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121318" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="タスク">
@@ -15,66 +16,86 @@
 </head>
 <body>
   <div class="app">
+    <!-- サイドバー（Mac）／ドロワー（スマホ） -->
     <nav class="sidebar" id="nav">
-      <h1 class="brand">タスク</h1>
-      <button class="nav-item" data-view="today"><span class="ico">☀︎</span><span>今日</span><span class="count" data-count="today"></span></button>
-      <button class="nav-item" data-view="mail"><span class="ico">✉︎</span><span>要返信</span><span class="count" data-count="mail"></span></button>
-      <button class="nav-item" data-view="upcoming"><span class="ico">🗓</span><span>予定</span><span class="count" data-count="upcoming"></span></button>
-      <button class="nav-item" data-view="all"><span class="ico">≡</span><span>すべて</span><span class="count" data-count="all"></span></button>
-      <button class="nav-item" data-view="done"><span class="ico">✓</span><span>完了</span></button>
+      <div class="brand">
+        <span class="brand-logo" data-icon="check"></span>
+        <span>タスク</span>
+      </div>
+      <button class="nav-item" data-view="today"><span class="ico" data-icon="sun"></span><span>今日</span><span class="count" data-count="today"></span></button>
+      <button class="nav-item" data-view="mail"><span class="ico" data-icon="mail"></span><span>要返信</span><span class="count accent" data-count="mail"></span></button>
+      <button class="nav-item" data-view="calendar"><span class="ico" data-icon="calendar"></span><span>カレンダー</span></button>
+      <button class="nav-item" data-view="upcoming"><span class="ico" data-icon="clock"></span><span>予定</span><span class="count" data-count="upcoming"></span></button>
+      <button class="nav-item" data-view="all"><span class="ico" data-icon="list"></span><span>すべて</span><span class="count" data-count="all"></span></button>
+      <button class="nav-item" data-view="done"><span class="ico" data-icon="done"></span><span>完了</span></button>
       <div class="nav-section">プロジェクト</div>
       <div id="projectList"></div>
       <div class="nav-section">タグ</div>
       <div id="tagList"></div>
       <div class="nav-footer">
-        <button class="nav-item" data-view="settings"><span class="ico">⚙︎</span><span>設定</span></button>
+        <button class="nav-item" data-view="settings"><span class="ico" data-icon="sliders"></span><span>設定</span></button>
         <div class="sync-status" id="syncStatus"></div>
       </div>
     </nav>
+    <div class="drawer-backdrop" id="drawerBackdrop"></div>
 
-    <main class="main">
+    <main class="main" id="main">
       <header class="main-header">
-        <h2 id="viewTitle">今日</h2>
-        <button class="icon-btn mobile-only" id="menuBtn" aria-label="メニュー">☰</button>
+        <div class="title-block">
+          <h2 id="viewTitle">今日</h2>
+          <div class="subtitle" id="viewSubtitle"></div>
+        </div>
+        <label class="search" id="searchBox">
+          <span class="search-ico" data-icon="search"></span>
+          <input id="search" type="search" placeholder="検索" autocomplete="off" enterkeyhint="search">
+          <kbd class="desktop-only">/</kbd>
+        </label>
       </header>
 
       <form class="quick-add" id="quickAdd" autocomplete="off">
-        <input id="quickInput" type="text" placeholder="＋ タスクを追加（例: 資料作成 明日 !高 #仕事）" enterkeyhint="done">
+        <span class="quick-ico" data-icon="plus"></span>
+        <input id="quickInput" type="text" placeholder="タスクを追加（例: 資料作成 明日 15:00 !高 #仕事 @電話）" enterkeyhint="done">
       </form>
 
+      <div class="filters" id="filters"></div>
+      <section id="dashboard" class="dashboard" hidden></section>
       <div class="mail-bar" id="mailBar" hidden>
         <span>Gmail を15分ごとに自動チェックしています</span>
-        <button class="btn secondary" id="checkMailBtn">今すぐ確認</button>
+        <button class="btn ghost" id="checkMailBtn">今すぐ確認</button>
       </div>
+      <section id="calendar" class="calendar" hidden></section>
       <section id="list" class="list"></section>
       <section id="settings" class="settings" hidden></section>
     </main>
+
+    <!-- スマホ用 下部タブバー -->
+    <nav class="tabbar" id="tabbar">
+      <button class="tab" data-view="today"><span data-icon="sun"></span><span>今日</span></button>
+      <button class="tab" data-view="mail"><span data-icon="mail"></span><span>要返信</span><i class="tab-badge" data-count="mail"></i></button>
+      <button class="tab" data-view="calendar"><span data-icon="calendar"></span><span>カレンダー</span></button>
+      <button class="tab" data-view="all"><span data-icon="list"></span><span>すべて</span></button>
+      <button class="tab" id="moreTab"><span data-icon="menu"></span><span>メニュー</span></button>
+    </nav>
+
+    <button class="fab" id="fab" aria-label="タスクを追加"><span data-icon="plus"></span></button>
   </div>
 
   <!-- 編集シート -->
   <div class="sheet-backdrop" id="sheetBackdrop" hidden>
     <form class="sheet" id="editForm" autocomplete="off">
+      <div class="sheet-grabber"></div>
       <div class="sheet-head">
         <button type="button" class="link-btn" id="cancelEdit">キャンセル</button>
-        <strong>タスクの編集</strong>
+        <strong id="sheetTitle">タスクの編集</strong>
         <button type="submit" class="link-btn primary">保存</button>
       </div>
-      <label class="field"><span>タイトル</span><input name="title" required></label>
-      <label class="field"><span>メモ</span><textarea name="notes" rows="3"></textarea></label>
-      <div class="row">
-        <label class="field"><span>期限日</span><input name="due" type="date"></label>
-        <label class="field"><span>時刻</span><input name="dueTime" type="time"></label>
-      </div>
-      <div class="row">
-        <label class="field"><span>優先度</span>
-          <select name="priority">
-            <option value="0">なし</option>
-            <option value="1">低</option>
-            <option value="2">中</option>
-            <option value="3">高</option>
-          </select>
-        </label>
-        <label class="field"><span>繰り返し</span>
+      <input class="title-input" name="title" required placeholder="タスク名">
+      <textarea class="notes-input" name="notes" rows="2" placeholder="メモ"></textarea>
+
+      <div class="field-group">
+        <label class="field-row"><span class="fr-label"><span data-icon="calendar"></span>期限日</span><input name="due" type="date"></label>
+        <label class="field-row"><span class="fr-label"><span data-icon="clock"></span>時刻</span><input name="dueTime" type="time"></label>
+        <label class="field-row"><span class="fr-label"><span data-icon="repeat"></span>繰り返し</span>
           <select name="repeat">
             <option value="none">なし</option>
             <option value="daily">毎日</option>
@@ -84,17 +105,29 @@
             <option value="yearly">毎年</option>
           </select>
         </label>
+        <label class="field-row"><span class="fr-label"><span data-icon="bell"></span>通知する</span><input type="checkbox" name="notify" class="switch"></label>
       </div>
-      <label class="field"><span>プロジェクト</span><input name="project" list="projectOptions" placeholder="例: 仕事"></label>
+
+      <div class="field-label">優先度</div>
+      <div class="segmented" id="prioritySeg">
+        <label><input type="radio" name="priority" value="0"><span>なし</span></label>
+        <label><input type="radio" name="priority" value="1"><span class="p1">低</span></label>
+        <label><input type="radio" name="priority" value="2"><span class="p2">中</span></label>
+        <label><input type="radio" name="priority" value="3"><span class="p3">高</span></label>
+      </div>
+
+      <div class="field-group">
+        <label class="field-row"><span class="fr-label"><span data-icon="hash"></span>プロジェクト</span><input name="project" list="projectOptions" placeholder="例: 仕事"></label>
+        <label class="field-row"><span class="fr-label"><span data-icon="tag"></span>タグ</span><input name="tags" placeholder="スペース区切り"></label>
+      </div>
       <datalist id="projectOptions"></datalist>
-      <label class="field"><span>タグ（スペース区切り）</span><input name="tags" placeholder="例: 電話 買い物"></label>
-      <label class="check-field"><input type="checkbox" name="notify"> <span>通知する（Googleカレンダーから通知・期限日が必要）</span></label>
+      <p class="hint">通知は Google カレンダーから届きます（期限日が必要）</p>
       <div class="sheet-source" id="sourceInfo" hidden></div>
       <button type="button" class="danger-btn" id="deleteTask">このタスクを削除</button>
     </form>
   </div>
 
-  <div class="toast" id="toast" hidden></div>
+  <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastUndo" hidden>元に戻す</button></div>
 
   <script src="app.js"></script>
 </body>
