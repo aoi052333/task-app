@@ -55,8 +55,43 @@
       </header>
 
       <form class="quick-add" id="quickAdd" autocomplete="off">
-        <span class="quick-ico" data-icon="plus"></span>
-        <input id="quickInput" type="text" placeholder="タスクを追加（例: 資料作成 明日 15:00 !高 #仕事 @電話）" enterkeyhint="done">
+        <div class="qa-main">
+          <span class="quick-ico" data-icon="plus"></span>
+          <input id="quickInput" name="title" type="text" placeholder="タスクを追加" enterkeyhint="done">
+          <button type="submit" class="btn qa-submit">追加</button>
+        </div>
+        <div class="qa-details" id="qaDetails" hidden>
+          <textarea name="notes" rows="2" placeholder="メモ（任意）"></textarea>
+          <div class="qa-row">
+            <label class="qa-chip"><span data-icon="calendar"></span><input type="date" name="due" aria-label="期限日"></label>
+            <label class="qa-chip"><span data-icon="clock"></span><input type="time" name="dueTime" aria-label="時刻"></label>
+            <div class="qa-seg" role="radiogroup" aria-label="優先度">
+              <label><input type="radio" name="priority" value="0" checked><span>優先度なし</span></label>
+              <label><input type="radio" name="priority" value="1"><span class="p1">低</span></label>
+              <label><input type="radio" name="priority" value="2"><span class="p2">中</span></label>
+              <label><input type="radio" name="priority" value="3"><span class="p3">高</span></label>
+            </div>
+          </div>
+          <div class="qa-row">
+            <label class="qa-chip grow"><span data-icon="hash"></span><input name="project" list="projectOptions" placeholder="プロジェクト"></label>
+            <label class="qa-chip grow"><span data-icon="tag"></span><input name="tags" placeholder="タグ（スペース区切り）"></label>
+            <label class="qa-chip"><span data-icon="repeat"></span>
+              <select name="repeat" aria-label="繰り返し">
+                <option value="none">繰り返さない</option>
+                <option value="daily">毎日</option>
+                <option value="weekdays">平日</option>
+                <option value="weekly">毎週</option>
+                <option value="monthly">毎月</option>
+                <option value="yearly">毎年</option>
+              </select>
+            </label>
+            <label class="qa-chip"><span data-icon="bell"></span>通知<input type="checkbox" name="notify" class="switch sm"></label>
+          </div>
+          <div class="qa-foot">
+            <span class="hint">Enter で追加 ・ Esc で閉じる ・ 「明日 15:00 !高 #仕事」のような書き方もOK</span>
+            <button type="button" class="link-btn" id="qaClose">閉じる</button>
+          </div>
+        </div>
       </form>
 
       <div class="filters" id="filters"></div>

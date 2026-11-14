@@ -797,6 +797,7 @@ function setView(view) {
   $('#search').value = '';
   save(LS.view, view);
   closeDrawer();
+  closeComposer();
   $('#main').scrollTop = 0;
   render();
 }
@@ -879,21 +880,74 @@ $('#checkMailBtn').addEventListener('click', async () => {
   }
 });
 
+/* ---------- 追加フォーム（タスク名と詳細を一度に入力） ---------- */
+// 表示中の画面に合わせた初期値
+function viewDefaults() {
+  const v = state.view;
+  const d = {};
+  if (v === 'today') d.due = today();
+  if (v === 'calendar') d.due = state.calSelected || today();
+  if (v.startsWith('project:')) d.project = v.slice(8);
+  if (v.startsWith('tag:')) d.tags = [v.slice(4)];
+  return d;
+}
+function resetComposer() {
+  const f = $('#quickAdd');
+  const d = viewDefaults();
+  f.reset();
+  f.due.value = d.due || '';
+  f.project.value = d.project || '';
+  f.tags.value = (d.tags || []).join(' ');
+}
+function openComposer() {
+  const f = $('#quickAdd');
+  if (f.classList.contains('open')) return;
+  resetComposer();
+  f.classList.add('open');
+  $('#qaDetails').hidden = false;
+}
+function closeComposer() {
+  const f = $('#quickAdd');
+  f.classList.remove('open');
+  $('#qaDetails').hidden = true;
+  f.reset();
+  document.activeElement?.blur();
+}
+$('#quickInput').addEventListener('focus', openComposer);
+$('#qaClose').addEventListener('click', closeComposer);
+// 何も入力していなければ、フォームの外をクリックしたときに閉じる
+document.addEventListener('pointerdown', e => {
+  const f = $('#quickAdd');
+  if (!f.classList.contains('open') || f.contains(e.target)) return;
+  if (!f.title.value.trim() && !f.notes.value.trim()) closeComposer();
+});
+
 $('#quickAdd').addEventListener('submit', e => {
   e.preventDefault();
-  const input = $('#quickInput');
-  if (!input.value.trim()) return;
-  const parsed = parseQuick(input.value);
-  if (!parsed.title) { toast('タイトルを入力してください'); return; }
-  // 表示中の画面に合わせて初期値を補う
-  const v = state.view;
-  if (v === 'today' && !parsed.due) parsed.due = today();
-  if (v === 'calendar' && !parsed.due) parsed.due = state.calSelected || today();
-  if (v.startsWith('project:') && !parsed.project) parsed.project = v.slice(8);
-  if (v.startsWith('tag:') && !parsed.tags.length) parsed.tags = [v.slice(4)];
-  upsertTask(newTask(parsed));
-  input.value = '';
-  toast(parsed.due ? `追加しました（${formatDue(parsed.due, parsed.dueTime)}）` : '追加しました');
+  const f = e.target;
+  if (!f.title.value.trim()) { f.title.focus(); return; }
+  // 「明日 15:00 !高 #仕事」のような書き方も読み取り、フォームで指定した値を優先する
+  const parsed = parseQuick(f.title.value);
+  if (!parsed.title) { toast('タスク名を入力してください'); return; }
+  const formTags = f.tags.value.split(/\s+/).map(s => s.replace(/^@/, '')).filter(Boolean);
+  const formPriority = Number(f.querySelector('[name=priority]:checked')?.value || 0);
+  const due = parsed.due || f.due.value;
+  const task = newTask({
+    title: parsed.title,
+    notes: f.notes.value,
+    due,
+    dueTime: due ? (parsed.dueTime || f.dueTime.value) : '',
+    priority: formPriority || parsed.priority,
+    project: parsed.project || f.project.value.trim().replace(/^#/, ''),
+    tags: [...new Set([...formTags, ...parsed.tags])],
+    repeat: f.repeat.value,
+    notify: f.notify.checked,
+  });
+  upsertTask(task);
+  toast(task.due ? `追加しました（${formatDue(task.due, task.dueTime)}）` : '追加しました');
+  // 続けて入力できるように、フォームを初期状態に戻してタスク名にカーソルを置く
+  resetComposer();
+  f.title.focus();
 });
 
 $('#editForm').addEventListener('submit', e => {
@@ -932,6 +986,7 @@ document.addEventListener('keydown', e => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName);
   if (e.key === 'Escape') {
     if (state.editingId) closeEditor();
+    else if ($('#quickAdd').classList.contains('open')) closeComposer();
     else if (state.query) { state.query = ''; $('#search').value = ''; $('#search').blur(); render(); }
     else closeDrawer();
     return;
