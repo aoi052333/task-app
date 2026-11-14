@@ -24,7 +24,7 @@ const SHEET_NAME = 'tasks';
 const HEADER = ['id', 'updatedAt', 'json', 'eventId', 'eventSig'];
 const TASK_CALENDAR_NAME = 'タスク';
 const EVENT_DAYS = 15;          // 何日先までの予定を返すか
-const EVENT_CACHE_SECONDS = 300; // 予定の一時保存時間（5分）
+const EVENT_CACHE_SECONDS = 60;  // 予定の一時保存時間（1分）
 
 /** 初期設定: 保存用スプレッドシート・合言葉（トークン）・タスク用カレンダーを用意する */
 function setup() {
@@ -133,6 +133,8 @@ function syncTasks(changes) {
     const props = PropertiesService.getScriptProperties();
     const fullSync = props.getProperty('CALENDAR_SYNCED') !== '1';
     const cal = getTaskCalendar();
+    // 先に、Google カレンダー側で動かされた予定をタスクに反映する（今回アプリで変更されたタスクは除く）
+    if (!fullSync) pullCalendarEdits(cal, rows);
     rows.forEach(function (r) {
       if (fullSync || r.dirty) syncEvent(cal, r);
     });
@@ -243,6 +245,47 @@ function createEvent(cal, t) {
   ev.removeAllReminders();
   if (t.notify) ev.addPopupReminder(0);
   return ev;
+}
+
+/**
+ * Google カレンダーの「タスク」カレンダーで日時やタイトルを変えた場合に、タスク側へ反映する（双方向同期）。
+ *   - 予定の日付・時刻・タイトルがタスクと違っていれば、タスクを予定に合わせる
+ *   - 予定をまとめて1回で取得するので、タスクが多くても遅くならない
+ */
+function pullCalendarEdits(cal, rows) {
+  const targets = rows.filter(function (r) { return r.eventId && !r.dirty && !r.task.deleted && !r.task.done; });
+  if (!targets.length) return;
+  const tz = Session.getScriptTimeZone();
+  const now = new Date();
+  const events = {};
+  cal.getEvents(new Date(now.getTime() - 120 * 86400000), new Date(now.getTime() + 730 * 86400000))
+    .forEach(function (ev) { events[ev.getId()] = ev; });
+
+  targets.forEach(function (r) {
+    const ev = events[r.eventId];
+    if (!ev) return; // 範囲外、またはカレンダー側で削除された予定はそのまま
+    const t = r.task;
+    let due, time;
+    if (ev.isAllDayEvent()) {
+      due = Utilities.formatDate(ev.getAllDayStartDate(), tz, 'yyyy-MM-dd');
+      time = '';
+    } else {
+      due = Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd');
+      time = Utilities.formatDate(ev.getStartTime(), tz, 'HH:mm');
+      // 「時刻なし・通知あり」のタスクは 9:00 の予定として登録しているので、9:00 のままなら時刻なしとみなす
+      if (!t.dueTime && t.notify && time === '09:00') time = '';
+    }
+    const title = ev.getTitle() || t.title;
+    if (due === t.due && time === (t.dueTime || '') && title === t.title) return;
+
+    const updated = Object.assign({}, t, { due: due, dueTime: time, title: title, updatedAt: new Date().toISOString() });
+    r.task = updated;
+    r.updatedAt = updated.updatedAt;
+    // 予定は今の状態のままでよいので、作り直さないよう目印を合わせておく
+    r.eventSig = JSON.stringify([updated.title, updated.notes, updated.due, updated.dueTime, !!updated.notify]);
+    r.dirty = true;
+    r.fromCalendar = true;
+  });
 }
 
 /** 表示中のカレンダーの予定（今日から EVENT_DAYS 日分）。タスク用カレンダーは除く */
