@@ -1041,7 +1041,18 @@ setInterval(() => { if (!document.hidden) sync(); }, 60_000);
 
 // オフライン用の Service Worker
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // 新しい版が公開されて切り替わったら、一度だけ自動で再読み込みして最新にする
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded || state.editingId) return;
+    reloaded = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    // アプリに戻ってきたときにも更新を確認する
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
 }
 
 fillIcons();

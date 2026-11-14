@@ -1,11 +1,16 @@
 // オフラインでも画面を開けるようにするための Service Worker
-// アプリを更新したら VERSION の数字を上げる
-const VERSION = 'v8';
+// アプリを更新したら VERSION の数字を上げる（index.html の ?v= も合わせる）
+const VERSION = 'v9';
 const CACHE = 'taskapp-' + VERSION;
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/favicon.svg', 'icons/favicon-32.png'];
+const FILES = ['./', 'index.html', 'style.css?v=9', 'app.js?v=9', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/favicon.svg', 'icons/favicon-32.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // ブラウザの一時保存を使わず、必ずサーバーから最新を取得してキャッシュする
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {
@@ -16,15 +21,17 @@ self.addEventListener('activate', e => {
   );
 });
 
-// 自分のファイルは「ネット優先・失敗したらキャッシュ」。同期API（別ドメイン）は触らない
+// 自分のファイルは「ネット優先（毎回サーバーに確認）・失敗したらキャッシュ」。同期API（別ドメイン）は触らない
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(new Request(e.request.url, { cache: 'no-cache', credentials: 'same-origin' }))
       .then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, copy));
+        }
         return res;
       })
       .catch(() => caches.match(e.request, { ignoreSearch: true }))
