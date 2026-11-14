@@ -181,6 +181,29 @@ kbd {
 .quick-add input::placeholder, .quick-add textarea::placeholder { color: var(--muted); }
 .qa-submit { padding: 7px 14px; font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity .15s; }
 .quick-add.open .qa-submit { opacity: 1; pointer-events: auto; }
+.qa-bulk-toggle {
+  display: none; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--text-2);
+  padding: 6px 10px; border-radius: 9px; background: var(--surface-2); flex-shrink: 0;
+}
+.quick-add.open .qa-bulk-toggle { display: inline-flex; }
+.qa-bulk-toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-text); }
+.quick-add.bulk .qa-main input { display: none; }
+.quick-add.bulk .qa-main::after { content: "複数のタスクをまとめて追加"; flex: 1; color: var(--text-2); font-weight: 600; font-size: 14px; padding: 10px 0; }
+.quick-add.bulk .qa-main .qa-bulk-toggle { order: 2; }
+.quick-add.bulk .qa-main .qa-submit { order: 3; }
+.quick-add.bulk [name=notes] { display: none; }
+.qa-bulk { display: flex; flex-direction: column; gap: 6px; }
+.qa-bulk[hidden] { display: none; }
+.qa-bulk textarea {
+  width: 100%; min-height: 140px; resize: vertical; background: var(--surface-2); border-radius: 10px; padding: 10px 12px;
+  font-size: 15px; line-height: 1.7; border: 1px solid transparent;
+}
+.qa-bulk textarea:focus { border-color: var(--accent); }
+.qa-bulk-note { font-size: 12px; color: var(--muted); padding: 0 2px; }
+@media (max-width: 760px) {
+  .quick-add.bulk .qa-main::after { content: "まとめて追加"; }
+  .qa-bulk-toggle span:last-child { display: none; }
+}
 .qa-details { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 8px; animation: fade .2s; }
 .qa-details[hidden] { display: none; }
 .qa-details textarea {

@@ -23,7 +23,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
   <div class="app">
@@ -72,9 +72,14 @@
         <div class="qa-main">
           <span class="quick-ico" data-icon="plus"></span>
           <input id="quickInput" name="title" type="text" placeholder="タスクを追加" enterkeyhint="done">
-          <button type="submit" class="btn qa-submit">追加</button>
+          <button type="button" class="qa-bulk-toggle" id="bulkToggle" aria-pressed="false" title="複数のタスクをまとめて追加"><span data-icon="list"></span><span>複数</span></button>
+          <button type="submit" class="btn qa-submit" id="qaSubmit">追加</button>
         </div>
         <div class="qa-details" id="qaDetails" hidden>
+          <div class="qa-bulk" id="qaBulk" hidden>
+            <textarea id="bulkInput" name="bulk" rows="6" placeholder="1行に1つずつ入力してください&#10;例）&#10;企画書を作る 明日 !高&#10;田中さんに電話 15:00&#10;牛乳を買う #買い物"></textarea>
+            <div class="qa-bulk-note" id="bulkNote">下の設定は、行ごとに指定しなかった項目にまとめて適用されます</div>
+          </div>
           <textarea name="notes" rows="2" placeholder="メモ（任意）"></textarea>
           <div class="qa-row">
             <label class="qa-chip"><span data-icon="calendar"></span><input type="date" name="due" aria-label="期限日"></label>
@@ -102,7 +107,7 @@
             <label class="qa-chip"><span data-icon="bell"></span>通知<input type="checkbox" name="notify" class="switch sm"></label>
           </div>
           <div class="qa-foot">
-            <span class="hint">Enter で追加 ・ Esc で閉じる ・ 「明日 15:00 !高 #仕事」のような書き方もOK</span>
+            <span class="hint" id="qaHint">Enter で追加 ・ Esc で閉じる ・ 「明日 15:00 !高 #仕事」のような書き方もOK</span>
             <button type="button" class="link-btn" id="qaClose">閉じる</button>
           </div>
         </div>
@@ -180,6 +185,6 @@
 
   <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastUndo" hidden>元に戻す</button></div>
 
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

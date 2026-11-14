@@ -1031,39 +1031,112 @@ function closeComposer() {
   const f = $('#quickAdd');
   f.classList.remove('open');
   $('#qaDetails').hidden = true;
+  setBulkMode(false);
   f.reset();
   document.activeElement?.blur();
 }
+
+/* ---------- まとめて追加（1行に1タスク） ---------- */
+// 箇条書きの記号（・ - * 1. □ [ ] など）を取り除いて、空行を除いた行の一覧にする
+function bulkLines(text) {
+  return text.split(/\r?\n/)
+    .map(l => l.replace(/^\s*(?:[-*•・●○◯□☐■▪︎]|\[\s?[xX]?\s?\]|\d+[.)．）]|[（(]\d+[)）])\s*/, '').trim())
+    .filter(Boolean);
+}
+function setBulkMode(on, text) {
+  const f = $('#quickAdd');
+  f.classList.toggle('bulk', on);
+  $('#qaBulk').hidden = !on;
+  $('#bulkToggle').setAttribute('aria-pressed', String(on));
+  $('#qaHint').textContent = on
+    ? '⌘ / Ctrl + Enter で追加 ・ 各行で「明日 15:00 !高 #仕事」のように個別指定もできます'
+    : 'Enter で追加 ・ Esc で閉じる ・ 「明日 15:00 !高 #仕事」のような書き方もOK';
+  if (on) {
+    const input = $('#bulkInput');
+    if (text !== undefined) input.value = text;
+    else if (f.title.value.trim() && !input.value) input.value = f.title.value.trim() + '\n';
+    f.title.value = '';
+    setTimeout(() => { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 30);
+  } else {
+    $('#bulkInput').value = '';
+  }
+  updateBulkCount();
+}
+function updateBulkCount() {
+  const on = $('#quickAdd').classList.contains('bulk');
+  const n = on ? bulkLines($('#bulkInput').value).length : 0;
+  $('#qaSubmit').textContent = on ? (n ? `${n}件を追加` : '追加') : '追加';
+}
+$('#bulkToggle').addEventListener('click', () => {
+  openComposer();
+  setBulkMode(!$('#quickAdd').classList.contains('bulk'));
+});
+$('#bulkInput').addEventListener('input', updateBulkCount);
+$('#bulkInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('#quickAdd').requestSubmit(); }
+});
+// 複数行のテキストを貼り付けたら、自動でまとめて追加に切り替える
+$('#quickInput').addEventListener('paste', e => {
+  const text = e.clipboardData?.getData('text') || '';
+  if (bulkLines(text).length > 1) {
+    e.preventDefault();
+    openComposer();
+    setBulkMode(true, text.trim() + '\n');
+    toast('複数行を貼り付けたので「まとめて追加」に切り替えました');
+  }
+});
+
 $('#quickInput').addEventListener('focus', openComposer);
 $('#qaClose').addEventListener('click', closeComposer);
 // 何も入力していなければ、フォームの外をクリックしたときに閉じる
 document.addEventListener('pointerdown', e => {
   const f = $('#quickAdd');
   if (!f.classList.contains('open') || f.contains(e.target)) return;
-  if (!f.title.value.trim() && !f.notes.value.trim()) closeComposer();
+  if (!f.title.value.trim() && !f.notes.value.trim() && !$('#bulkInput').value.trim()) closeComposer();
 });
 
-$('#quickAdd').addEventListener('submit', e => {
-  e.preventDefault();
-  const f = e.target;
-  if (!f.title.value.trim()) { f.title.focus(); return; }
-  // 「明日 15:00 !高 #仕事」のような書き方も読み取り、フォームで指定した値を優先する
-  const parsed = parseQuick(f.title.value);
-  if (!parsed.title) { toast('タスク名を入力してください'); return; }
+// フォームの共通設定と、行ごとの書き方（明日 15:00 !高 #仕事）を合わせてタスクを作る
+function composeTask(f, text, { notes = '', lineWins = false } = {}) {
+  const parsed = parseQuick(text);
+  if (!parsed.title) return null;
   const formTags = f.tags.value.split(/\s+/).map(s => s.replace(/^@/, '')).filter(Boolean);
   const formPriority = Number(f.querySelector('[name=priority]:checked')?.value || 0);
   const due = parsed.due || f.due.value;
-  const task = newTask({
+  return newTask({
     title: parsed.title,
-    notes: f.notes.value,
+    notes,
     due,
     dueTime: due ? (parsed.dueTime || f.dueTime.value) : '',
-    priority: formPriority || parsed.priority,
+    priority: lineWins ? (parsed.priority || formPriority) : (formPriority || parsed.priority),
     project: parsed.project || f.project.value.trim().replace(/^#/, ''),
     tags: [...new Set([...formTags, ...parsed.tags])],
     repeat: f.repeat.value,
     notify: f.notify.checked,
   });
+}
+
+$('#quickAdd').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+
+  if (f.classList.contains('bulk')) {
+    const tasks = bulkLines($('#bulkInput').value).map(l => composeTask(f, l, { lineWins: true })).filter(Boolean);
+    if (!tasks.length) { $('#bulkInput').focus(); toast('1行に1つずつタスクを入力してください'); return; }
+    tasks.forEach(t => upsertTask(t, { quiet: true }));
+    render();
+    toast(`${tasks.length}件のタスクを追加しました`, () => {
+      tasks.forEach(t => upsertTask({ ...t, deleted: true }, { quiet: true }));
+      render();
+    });
+    resetComposer();
+    setBulkMode(false);
+    closeComposer();
+    return;
+  }
+
+  if (!f.title.value.trim()) { f.title.focus(); return; }
+  const task = composeTask(f, f.title.value, { notes: f.notes.value });
+  if (!task) { toast('タスク名を入力してください'); return; }
   upsertTask(task);
   toast(task.due ? `追加しました（${formatDue(task.due, task.dueTime)}）` : '追加しました');
   // 続けて入力できるように、フォームを初期状態に戻してタスク名にカーソルを置く
