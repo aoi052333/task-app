@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2f6fed">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="タスク">
+  <title>タスク</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar" id="nav">
+      <h1 class="brand">タスク</h1>
+      <button class="nav-item" data-view="today"><span class="ico">☀︎</span><span>今日</span><span class="count" data-count="today"></span></button>
+      <button class="nav-item" data-view="upcoming"><span class="ico">🗓</span><span>予定</span><span class="count" data-count="upcoming"></span></button>
+      <button class="nav-item" data-view="all"><span class="ico">≡</span><span>すべて</span><span class="count" data-count="all"></span></button>
+      <button class="nav-item" data-view="done"><span class="ico">✓</span><span>完了</span></button>
+      <div class="nav-section">プロジェクト</div>
+      <div id="projectList"></div>
+      <div class="nav-section">タグ</div>
+      <div id="tagList"></div>
+      <div class="nav-footer">
+        <button class="nav-item" data-view="settings"><span class="ico">⚙︎</span><span>設定</span></button>
+        <div class="sync-status" id="syncStatus"></div>
+      </div>
+    </nav>
+
+    <main class="main">
+      <header class="main-header">
+        <h2 id="viewTitle">今日</h2>
+        <button class="icon-btn mobile-only" id="menuBtn" aria-label="メニュー">☰</button>
+      </header>
+
+      <form class="quick-add" id="quickAdd" autocomplete="off">
+        <input id="quickInput" type="text" placeholder="＋ タスクを追加（例: 資料作成 明日 !高 #仕事）" enterkeyhint="done">
+      </form>
+
+      <section id="list" class="list"></section>
+      <section id="settings" class="settings" hidden></section>
+    </main>
+  </div>
+
+  <!-- 編集シート -->
+  <div class="sheet-backdrop" id="sheetBackdrop" hidden>
+    <form class="sheet" id="editForm" autocomplete="off">
+      <div class="sheet-head">
+        <button type="button" class="link-btn" id="cancelEdit">キャンセル</button>
+        <strong>タスクの編集</strong>
+        <button type="submit" class="link-btn primary">保存</button>
+      </div>
+      <label class="field"><span>タイトル</span><input name="title" required></label>
+      <label class="field"><span>メモ</span><textarea name="notes" rows="3"></textarea></label>
+      <div class="row">
+        <label class="field"><span>期限日</span><input name="due" type="date"></label>
+        <label class="field"><span>時刻</span><input name="dueTime" type="time"></label>
+      </div>
+      <div class="row">
+        <label class="field"><span>優先度</span>
+          <select name="priority">
+            <option value="0">なし</option>
+            <option value="1">低</option>
+            <option value="2">中</option>
+            <option value="3">高</option>
+          </select>
+        </label>
+        <label class="field"><span>繰り返し</span>
+          <select name="repeat">
+            <option value="none">なし</option>
+            <option value="daily">毎日</option>
+            <option value="weekdays">平日</option>
+            <option value="weekly">毎週</option>
+            <option value="monthly">毎月</option>
+            <option value="yearly">毎年</option>
+          </select>
+        </label>
+      </div>
+      <label class="field"><span>プロジェクト</span><input name="project" list="projectOptions" placeholder="例: 仕事"></label>
+      <datalist id="projectOptions"></datalist>
+      <label class="field"><span>タグ（スペース区切り）</span><input name="tags" placeholder="例: 電話 買い物"></label>
+      <label class="check-field"><input type="checkbox" name="notify"> <span>通知する（Googleカレンダー連携後に有効）</span></label>
+      <div class="sheet-source" id="sourceInfo" hidden></div>
+      <button type="button" class="danger-btn" id="deleteTask">このタスクを削除</button>
+    </form>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
