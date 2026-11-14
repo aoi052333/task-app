@@ -85,7 +85,7 @@ function applyTheme(mode, animate) {
   }
   if (mode === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', mode);
   const dark = mode === 'dark' || (mode === 'auto' && darkQuery.matches);
-  $('#themeColor')?.setAttribute('content', dark ? '#121318' : '#f4f5fb');
+  $('#themeColor')?.setAttribute('content', dark ? '#0C0A09' : '#FAFAF9');
   document.querySelectorAll('[data-theme-set]').forEach(b => b.classList.toggle('on', b.dataset.themeSet === mode));
 }
 function setTheme(mode) {
@@ -454,7 +454,7 @@ function render() {
   } else {
     html += groups.map(g => `
       ${g.title ? `<div class="group-title ${g.cls || ''}">${esc(g.title)}<span class="gcount">${g.items.length}</span></div>` : ''}
-      ${g.items.map(x => x.kind === 'event' ? eventHtml(x) : taskHtml(x)).join('')}
+      <div class="group-list">${g.items.map(x => x.kind === 'event' ? eventHtml(x) : taskHtml(x)).join('')}</div>
     `).join('');
   }
   $('#list').innerHTML = html;
@@ -475,19 +475,21 @@ function renderDashboard() {
     : pct === 100 ? 'すべて完了！おつかれさまでした 🎉'
     : `あと ${todayOpen} 件`;
   $('#dashboard').innerHTML = `
-    <div class="hero">
-      <div class="hero-greet">${greet}</div>
-      <div class="hero-sub">${esc(message)}</div>
-      <div class="progress">
-        <div class="progress-top"><span>今日の達成</span><span>${doneN} / ${total}（${pct}%）</span></div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    <div class="dash">
+      <div class="dash-head">
+        <div>
+          <div class="hero-greet">${greet}</div>
+          <div class="hero-sub">${esc(message)}</div>
+        </div>
+        <div class="dash-pct"><b>${pct}<span style="font-size:15px">%</span></b><small>今日の達成 ${doneN}/${total}</small></div>
       </div>
-    </div>
-    <div class="stats">
-      <button class="stat" data-goto="today"><div class="stat-num">${todayOpen}</div><div class="stat-label">${icon('flag')}今日のタスク</div></button>
-      <button class="stat ${overdue ? 'warn' : ''}" data-goto="today"><div class="stat-num">${overdue}</div><div class="stat-label">${icon('alert')}期限切れ</div></button>
-      <button class="stat ${mails ? 'mail' : ''}" data-goto="mail"><div class="stat-num">${mails}</div><div class="stat-label">${icon('mail')}要返信</div></button>
-      <button class="stat" data-goto="calendar"><div class="stat-num">${events}</div><div class="stat-label">${icon('calendar')}今日の予定</div></button>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="stats">
+        <button class="stat" data-goto="today"><div class="stat-num">${todayOpen}</div><div class="stat-label">${icon('flag')}今日のタスク</div></button>
+        <button class="stat ${overdue ? 'warn' : ''}" data-goto="today"><div class="stat-num">${overdue}</div><div class="stat-label">${icon('alert')}期限切れ</div></button>
+        <button class="stat ${mails ? 'mail' : ''}" data-goto="mail"><div class="stat-num">${mails}</div><div class="stat-label">${icon('mail')}要返信</div></button>
+        <button class="stat" data-goto="calendar"><div class="stat-num">${events}</div><div class="stat-label">${icon('calendar')}今日の予定</div></button>
+      </div>
     </div>`;
 }
 
@@ -615,7 +617,7 @@ function taskHtml(x) {
     meta.push(`<span class="chip mail">✉︎ 要返信${esc(when)}</span>`);
     if (x.sourceUrl) meta.push(`<a href="${esc(x.sourceUrl)}" target="_blank" rel="noopener">Gmailで開く ↗</a>`);
   }
-  if (x.project && state.view !== 'project:' + x.project) meta.push(`<span class="chip proj" style="--h:${hue(x.project)}"># ${esc(x.project)}</span>`);
+  if (x.project && state.view !== 'project:' + x.project) meta.push(`<span class="chip proj" style="--h:${hue(x.project)}">${esc(x.project)}</span>`);
   for (const tag of x.tags) meta.push(`<span class="chip">@${esc(tag)}</span>`);
   return `
     <div class="task-wrap" data-id="${esc(x.id)}">
