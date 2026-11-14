@@ -354,6 +354,39 @@ kbd {
 .cal-day.selected .cal-num { background: var(--grad); color: #fff !important; box-shadow: 0 4px 10px -4px rgba(91,91,240,.7); }
 .cal-dots { display: flex; gap: 3px; height: 6px; }
 .cal-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--c, var(--accent)); }
+/* 月／週の切り替え */
+.cal-mode { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 3px; gap: 2px; margin-right: 4px; }
+.cal-mode button { padding: 4px 12px; border-radius: 7px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.cal-mode button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.cal-nav { align-items: center; }
+
+/* 週表示 */
+.week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.wk-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.wk-head { height: auto; padding: 6px 0 4px; gap: 2px; }
+.wk-head .cal-num { flex-shrink: 0; min-height: 28px; aspect-ratio: 1; }
+.cal-dow-s { font-size: 11px; font-weight: 600; color: var(--muted); }
+.cal-day.sun .cal-dow-s { color: var(--danger); }
+.cal-day.sat .cal-dow-s { color: var(--p1); }
+.wk-items {
+  flex: 1; min-height: 260px; background: var(--surface-2); border-radius: 12px; padding: 5px;
+  display: flex; flex-direction: column; gap: 4px; cursor: pointer;
+}
+.wk-col.selected .wk-items { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.wk-item {
+  display: block; width: 100%; text-align: left; font-size: 12px; line-height: 1.35; padding: 5px 7px; border-radius: 7px;
+  background: var(--surface); box-shadow: var(--shadow-sm); word-break: break-word; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
+.wk-time { display: block; font-size: 10.5px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.wk-event { border-left: 3px solid var(--c); }
+.wk-task { border-left: 3px solid var(--muted); font-weight: 500; }
+.wk-task.p1 { border-left-color: var(--p1); }
+.wk-task.p2 { border-left-color: var(--p2); }
+.wk-task.p3 { border-left-color: var(--p3); }
+.wk-task.done { color: var(--muted); text-decoration: line-through; border-left-color: var(--success); }
+.wk-task:hover { box-shadow: var(--shadow-sm), 0 0 0 1px var(--accent); }
+
 .cal-day-title { font-size: 15px; font-weight: 700; margin: 20px 4px 10px; }
 
 /* ---------- 編集シート ---------- */
@@ -469,6 +502,12 @@ kbd {
   .event-time { min-width: 74px; }
   .cal-card { padding: 10px 6px; }
   .cal-day { height: 50px; padding-top: 4px; }
+  /* スマホの週表示：日付を横一列に並べ、内容は下の一覧で見る */
+  .week-grid { gap: 2px; }
+  .wk-items { display: none; }
+  .wk-head { padding: 4px 0; }
+  .cal-head { flex-wrap: wrap; gap: 8px; }
+  .cal-month { font-size: 15.5px; }
 
   .tabbar {
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;

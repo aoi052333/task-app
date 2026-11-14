@@ -13,6 +13,7 @@ const LS = {
   view: 'taskapp.view',
   events: 'taskapp.events',
   filters: 'taskapp.filters',
+  calMode: 'taskapp.calMode',
 };
 
 const PRIORITY_LABEL = { 1: '低', 2: '中', 3: '高' };
@@ -37,6 +38,7 @@ const state = {
   query: '',
   calMonth: '',     // カレンダーで表示中の月 (YYYY-MM)
   calSelected: '',  // カレンダーで選択中の日 (YYYY-MM-DD)
+  calMode: load(LS.calMode, 'month'), // カレンダーの表示（month / week）
   editingId: null,  // 編集中のタスクID（新規作成時は 'new'）
   newDefaults: {},
   syncing: false,
@@ -494,37 +496,88 @@ function renderFilters(show) {
     (state.filters.length ? '<button class="filter-chip" data-filter="clear">クリア</button>' : '');
 }
 
+function calDots(ds) {
+  return [
+    ...eventsOn(ds).map(e => e.color || 'var(--accent)'),
+    ...open().filter(x => x.due === ds).map(x => ({ 3: 'var(--p3)', 2: 'var(--p2)', 1: 'var(--p1)' }[x.priority] || 'var(--muted)')),
+  ].slice(0, 4);
+}
+function calDayCls(d, ds, extra) {
+  const t = today();
+  return ['cal-day', extra, ds === t && 'today', ds === state.calSelected && 'selected',
+    d.getDay() === 0 && 'sun', d.getDay() === 6 && 'sat'].filter(Boolean).join(' ');
+}
+const dotsHtml = ds => `<span class="cal-dots">${calDots(ds).map(c => `<i style="--c:${esc(c)}"></i>`).join('')}</span>`;
+// 選択中の日を含む週の日曜日
+function weekStart(ds) { const d = parseYmd(ds); return addDays(ds, -d.getDay()); }
+
 function renderCalendar() {
   if (!state.calSelected) state.calSelected = today();
   if (!state.calMonth) state.calMonth = state.calSelected.slice(0, 7);
+  const isWeek = state.calMode === 'week';
+  const modeSwitch = `
+    <div class="cal-mode" role="radiogroup" aria-label="表示">
+      <button class="${!isWeek ? 'on' : ''}" data-calmode="month">月</button>
+      <button class="${isWeek ? 'on' : ''}" data-calmode="week">週</button>
+    </div>`;
+  const nav = (label) => `
+    <div class="cal-head">
+      <div class="cal-month">${label}</div>
+      <div class="cal-nav">
+        ${modeSwitch}
+        <button class="today-btn" data-cal="today">今日</button>
+        <button class="icon-btn" data-cal="prev" aria-label="前へ">${icon('left')}</button>
+        <button class="icon-btn" data-cal="next" aria-label="次へ">${icon('right')}</button>
+      </div>
+    </div>`;
+
+  if (isWeek) {
+    const ws = weekStart(state.calSelected);
+    const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+    const s = parseYmd(days[0]), e = parseYmd(days[6]);
+    const label = s.getMonth() === e.getMonth()
+      ? `${s.getFullYear()}年${s.getMonth() + 1}月${s.getDate()}日 – ${e.getDate()}日`
+      : `${s.getMonth() + 1}月${s.getDate()}日 – ${e.getMonth() + 1}月${e.getDate()}日`;
+    const cols = days.map(ds => {
+      const d = parseYmd(ds);
+      const items = [
+        ...eventsOn(ds).map(ev => `
+          <div class="wk-item wk-event" style="--c:${esc(ev.color || 'var(--accent)')}">
+            <span class="wk-time">${ev.allDay ? '終日' : esc(ev.start.slice(11, 16))}</span>${esc(ev.title)}
+          </div>`),
+        ...sortTasks(live().filter(x => x.due === ds && !x.done)).map(x => `
+          <button class="wk-item wk-task p${x.priority}" data-edit-id="${esc(x.id)}">
+            ${x.dueTime ? `<span class="wk-time">${esc(x.dueTime)}</span>` : ''}${esc(x.title)}
+          </button>`),
+        ...live().filter(x => x.due === ds && x.done).map(x => `
+          <button class="wk-item wk-task done" data-edit-id="${esc(x.id)}">${esc(x.title)}</button>`),
+      ].join('');
+      return `
+        <div class="wk-col ${ds === state.calSelected ? 'selected' : ''}">
+          <button class="${calDayCls(d, ds, 'wk-head')}" data-date="${ds}">
+            <span class="cal-dow-s">${WEEKDAYS[d.getDay()]}</span>
+            <span class="cal-num">${d.getDate()}</span>
+            ${dotsHtml(ds)}
+          </button>
+          <div class="wk-items" data-date="${ds}">${items}</div>
+        </div>`;
+    }).join('');
+    $('#calendar').innerHTML = `<div class="cal-card">${nav(label)}<div class="week-grid">${cols}</div></div>`;
+    return;
+  }
+
   const [y, m] = state.calMonth.split('-').map(Number);
   const first = new Date(y, m - 1, 1);
   const start = new Date(y, m - 1, 1 - first.getDay());
-  const t = today();
   let cells = '';
   for (let i = 0; i < 42; i++) {
     const d = new Date(start); d.setDate(start.getDate() + i);
     const ds = ymd(d);
-    const dots = [
-      ...eventsOn(ds).map(e => e.color || 'var(--accent)'),
-      ...open().filter(x => x.due === ds).map(x => ({ 3: 'var(--p3)', 2: 'var(--p2)', 1: 'var(--p1)' }[x.priority] || 'var(--muted)')),
-    ].slice(0, 4);
-    const cls = [
-      'cal-day', d.getMonth() !== m - 1 && 'other', ds === t && 'today', ds === state.calSelected && 'selected',
-      d.getDay() === 0 && 'sun', d.getDay() === 6 && 'sat',
-    ].filter(Boolean).join(' ');
-    cells += `<button class="${cls}" data-date="${ds}"><span class="cal-num">${d.getDate()}</span><span class="cal-dots">${dots.map(c => `<i style="--c:${esc(c)}"></i>`).join('')}</span></button>`;
+    cells += `<button class="${calDayCls(d, ds, d.getMonth() !== m - 1 && 'other')}" data-date="${ds}"><span class="cal-num">${d.getDate()}</span>${dotsHtml(ds)}</button>`;
   }
   $('#calendar').innerHTML = `
     <div class="cal-card">
-      <div class="cal-head">
-        <div class="cal-month">${y}年${m}月</div>
-        <div class="cal-nav">
-          <button class="today-btn" data-cal="today">今日</button>
-          <button class="icon-btn" data-cal="prev" aria-label="前の月">${icon('left')}</button>
-          <button class="icon-btn" data-cal="next" aria-label="次の月">${icon('right')}</button>
-        </div>
-      </div>
+      ${nav(`${y}年${m}月`)}
       <div class="cal-grid">
         ${WEEKDAYS.map((w, i) => `<div class="cal-dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</div>`).join('')}
         ${cells}
@@ -844,6 +897,8 @@ document.addEventListener('click', e => {
   if (swipe.active) return;
   const th = e.target.closest('[data-theme-set]');
   if (th) { setTheme(th.dataset.themeSet); return; }
+  const editBtn = e.target.closest('[data-edit-id]');
+  if (editBtn) { openEditor(editBtn.dataset.editId); return; }
   const nav = e.target.closest('[data-view]');
   if (nav) { setView(nav.dataset.view); return; }
   const go = e.target.closest('[data-goto]');
@@ -863,11 +918,26 @@ document.addEventListener('click', e => {
     render();
     return;
   }
+  const mode = e.target.closest('[data-calmode]');
+  if (mode) {
+    state.calMode = mode.dataset.calmode;
+    save(LS.calMode, state.calMode);
+    // 月表示に戻るときは、選択中の日の月を表示する
+    state.calMonth = state.calSelected.slice(0, 7);
+    render();
+    return;
+  }
   const cal = e.target.closest('[data-cal]');
   if (cal) {
-    const [y, m] = state.calMonth.split('-').map(Number);
+    const dir = cal.dataset.cal === 'next' ? 1 : -1;
     if (cal.dataset.cal === 'today') { state.calSelected = today(); state.calMonth = ''; }
-    else state.calMonth = ymd(new Date(y, m - 1 + (cal.dataset.cal === 'next' ? 1 : -1), 1)).slice(0, 7);
+    else if (state.calMode === 'week') {
+      state.calSelected = addDays(state.calSelected, 7 * dir);
+      state.calMonth = state.calSelected.slice(0, 7);
+    } else {
+      const [y, m] = state.calMonth.split('-').map(Number);
+      state.calMonth = ymd(new Date(y, m - 1 + dir, 1)).slice(0, 7);
+    }
     render();
     return;
   }
