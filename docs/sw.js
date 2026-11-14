@@ -1,8 +1,8 @@
 // オフラインでも画面を開けるようにするための Service Worker
 // アプリを更新したら VERSION の数字を上げる
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = 'taskapp-' + VERSION;
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png'];
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/favicon.svg', 'icons/favicon-32.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
