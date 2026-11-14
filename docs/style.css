@@ -354,6 +354,31 @@ kbd {
 .cal-day.selected .cal-num { background: var(--grad); color: #fff !important; box-shadow: 0 4px 10px -4px rgba(91,91,240,.7); }
 .cal-dots { display: flex; gap: 3px; height: 6px; }
 .cal-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--c, var(--accent)); }
+/* カレンダー画面は横幅を広く使う */
+.main.wide > * { max-width: 1280px; }
+.main.wide .quick-add { max-width: 1224px; }
+
+/* 月表示：マスの中に予定名を表示 */
+.cal-grid { gap: 4px; }
+.cal-grid .cal-day:not(.wk-head) {
+  height: auto; min-height: 118px; align-items: stretch; justify-content: flex-start; gap: 3px;
+  padding: 5px 4px 6px; background: var(--surface-2); min-width: 0;
+}
+.cal-grid .cal-day:not(.wk-head):hover { box-shadow: inset 0 0 0 1px var(--line); background: var(--surface-2); }
+.cal-grid .cal-day.selected { box-shadow: inset 0 0 0 1.5px var(--accent) !important; }
+.cal-grid .cal-num { align-self: center; width: 26px; height: 26px; font-size: 13px; }
+.cal-labels { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cal-label {
+  display: block; text-align: left; font-size: 11.5px; line-height: 1.4; padding: 1px 6px; border-radius: 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text);
+  background: color-mix(in srgb, var(--c) 20%, var(--surface)); border-left: 3px solid var(--c);
+}
+.cal-label.task { background: var(--surface); }
+.cal-time { color: var(--text-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+.cal-more { font-size: 11px; color: var(--muted); font-weight: 600; padding-left: 6px; text-align: left; }
+.cal-more.m2 { display: none; }
+.cal-day.other .cal-label { opacity: .7; }
+
 /* 月／週の切り替え */
 .cal-mode { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 3px; gap: 2px; margin-right: 4px; }
 .cal-mode button { padding: 4px 12px; border-radius: 7px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
@@ -369,7 +394,7 @@ kbd {
 .cal-day.sun .cal-dow-s { color: var(--danger); }
 .cal-day.sat .cal-dow-s { color: var(--p1); }
 .wk-items {
-  flex: 1; min-height: 260px; background: var(--surface-2); border-radius: 12px; padding: 5px;
+  flex: 1; min-height: max(420px, calc(100dvh - 330px)); background: var(--surface-2); border-radius: 12px; padding: 5px;
   display: flex; flex-direction: column; gap: 4px; cursor: pointer;
 }
 .wk-col.selected .wk-items { box-shadow: inset 0 0 0 1.5px var(--accent); }
@@ -502,6 +527,16 @@ kbd {
   .event-time { min-width: 74px; }
   .cal-card { padding: 10px 6px; }
   .cal-day { height: 50px; padding-top: 4px; }
+  /* スマホの月表示：ラベルを小さくして2件まで */
+  .cal-grid { gap: 2px; }
+  .cal-grid .cal-day:not(.wk-head) { min-height: 84px; padding: 3px 1px 4px; border-radius: 8px; }
+  .cal-grid .cal-num { width: 24px; height: 24px; font-size: 12.5px; }
+  .cal-label { font-size: 9.5px; padding: 1px 2px 1px 3px; border-left-width: 2px; border-radius: 3px; line-height: 1.35; }
+  .cal-label:nth-child(n+3) { display: none; }
+  .cal-time { display: none; }
+  .cal-more { font-size: 9.5px; padding-left: 3px; }
+  .cal-more.m4 { display: none; }
+  .cal-more.m2 { display: block; }
   /* スマホの週表示：日付を横一列に並べ、内容は下の一覧で見る */
   .week-grid { gap: 2px; }
   .wk-items { display: none; }

@@ -414,6 +414,7 @@ function render() {
   const isCalendar = view === 'calendar' && !searching;
   $('#settings').hidden = !isSettings;
   $('#calendar').hidden = !isCalendar;
+  $('#main').classList.toggle('wide', isCalendar);
   $('#list').hidden = isSettings;
   $('#quickAdd').hidden = isSettings || (!searching && (view === 'done' || view === 'mail'));
   $('#mailBar').hidden = searching || view !== 'mail';
@@ -573,7 +574,19 @@ function renderCalendar() {
   for (let i = 0; i < 42; i++) {
     const d = new Date(start); d.setDate(start.getDate() + i);
     const ds = ymd(d);
-    cells += `<button class="${calDayCls(d, ds, d.getMonth() !== m - 1 && 'other')}" data-date="${ds}"><span class="cal-num">${d.getDate()}</span>${dotsHtml(ds)}</button>`;
+    // マスの中に予定・タスクの名前を表示（Mac は4件、スマホは2件まで。残りは「+N」）
+    const labels = [
+      ...eventsOn(ds).map(ev => ({ c: ev.color || 'var(--accent)', time: ev.allDay ? '' : ev.start.slice(11, 16), t: ev.title })),
+      ...sortTasks(open().filter(x => x.due === ds)).map(x => ({
+        c: { 3: 'var(--p3)', 2: 'var(--p2)', 1: 'var(--p1)' }[x.priority] || 'var(--muted)', t: x.title, task: true,
+      })),
+    ];
+    const more = n => labels.length > n ? `<span class="cal-more m${n}">+${labels.length - n}件</span>` : '';
+    cells += `<button class="${calDayCls(d, ds, d.getMonth() !== m - 1 && 'other')}" data-date="${ds}">
+      <span class="cal-num">${d.getDate()}</span>
+      <span class="cal-labels">${labels.slice(0, 4).map(l =>
+        `<span class="cal-label ${l.task ? 'task' : ''}" style="--c:${esc(l.c)}">${l.time ? `<span class="cal-time">${esc(l.time)} </span>` : ''}${esc(l.t)}</span>`).join('')}${more(4)}${more(2)}</span>
+    </button>`;
   }
   $('#calendar').innerHTML = `
     <div class="cal-card">
