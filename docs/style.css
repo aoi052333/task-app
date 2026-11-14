@@ -200,6 +200,36 @@ kbd {
 }
 .qa-bulk textarea:focus { border-color: var(--accent); }
 .qa-bulk-note { font-size: 12px; color: var(--muted); padding: 0 2px; }
+.qa-bulk-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.qa-tool {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-2);
+  padding: 7px 12px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line);
+}
+.qa-tool:hover { border-color: var(--accent); color: var(--accent-text); }
+.qa-tool.ai { color: #fff; background: linear-gradient(135deg, #10a37f, #1a7f64); border-color: transparent; }
+.qa-tool.ai:hover { color: #fff; filter: brightness(1.08); }
+.spark { font-size: 13px; }
+.ai-panel {
+  display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 12px;
+  background: color-mix(in srgb, #10a37f 8%, var(--surface)); border: 1px solid color-mix(in srgb, #10a37f 35%, transparent);
+  animation: fade .2s;
+}
+.ai-panel[hidden] { display: none; }
+.ai-title { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 6px; color: var(--text); }
+.ai-title .spark { color: #10a37f; }
+.ai-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.ai-field input, .ai-field select {
+  background: var(--surface); border-radius: 9px; padding: 9px 11px; font-size: 15px; color: var(--text); font-weight: 400;
+  border: 1px solid var(--line);
+}
+.ai-field input:focus, .ai-field select:focus { border-color: #10a37f; }
+.ai-row { display: flex; gap: 8px; }
+.ai-field.small select { width: 80px; }
+.ai-field.grow { flex: 1; min-width: 0; }
+.ai-steps { margin: 0; padding-left: 20px; font-size: 12.5px; color: var(--text-2); line-height: 1.7; }
+.ai-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ai-actions .btn:first-child { background: linear-gradient(135deg, #10a37f, #1a7f64); box-shadow: 0 4px 12px -4px rgba(16, 163, 127, .6); }
+.ai-actions .link-btn { margin-left: auto; }
 @media (max-width: 760px) {
   .quick-add.bulk .qa-main::after { content: "まとめて追加"; }
   .qa-bulk-toggle span:last-child { display: none; }

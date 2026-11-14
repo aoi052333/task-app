@@ -23,7 +23,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
   <div class="app">
@@ -78,6 +78,35 @@
         <div class="qa-details" id="qaDetails" hidden>
           <div class="qa-bulk" id="qaBulk" hidden>
             <textarea id="bulkInput" name="bulk" rows="6" placeholder="1行に1つずつ入力してください&#10;例）&#10;企画書を作る 明日 !高&#10;田中さんに電話 15:00&#10;牛乳を買う #買い物"></textarea>
+            <div class="qa-bulk-tools">
+              <button type="button" class="qa-tool ai" id="aiOpenBtn"><span class="spark">✦</span>ChatGPTで作る</button>
+              <button type="button" class="qa-tool" id="pasteBtn"><span data-icon="paste"></span>貼り付け</button>
+            </div>
+            <div class="ai-panel" id="aiPanel" hidden>
+              <div class="ai-title"><span class="spark">✦</span>ChatGPT でタスクを作る</div>
+              <label class="ai-field">
+                <span>どんなタスクを作りますか？</span>
+                <input id="aiTheme" placeholder="例：来月の引っ越し準備、試験までの勉強計画、旅行の持ち物" enterkeyhint="go">
+              </label>
+              <div class="ai-row">
+                <label class="ai-field small"><span>件数</span>
+                  <select id="aiCount"><option>5</option><option selected>10</option><option>15</option><option>20</option></select>
+                </label>
+                <label class="ai-field small grow"><span>補足（任意）</span>
+                  <input id="aiExtra" placeholder="例：平日の夜だけ、来週中に終わらせたい">
+                </label>
+              </div>
+              <ol class="ai-steps">
+                <li>「ChatGPTを開く」を押すと、依頼文が入った状態で ChatGPT が開きます（送信されていなければ送信ボタンを押してください）</li>
+                <li>回答の右下にある <b>コピー</b> ボタンで回答をコピーします</li>
+                <li>このアプリに戻って「<b>貼り付け</b>」を押し、内容を確認して追加します</li>
+              </ol>
+              <div class="ai-actions">
+                <button type="button" class="btn" id="aiGoBtn">ChatGPTを開く</button>
+                <button type="button" class="btn ghost" id="aiCopyBtn">依頼文をコピー</button>
+                <button type="button" class="link-btn" id="aiCloseBtn">閉じる</button>
+              </div>
+            </div>
             <div class="qa-bulk-note" id="bulkNote">下の設定は、行ごとに指定しなかった項目にまとめて適用されます</div>
           </div>
           <textarea name="notes" rows="2" placeholder="メモ（任意）"></textarea>
@@ -185,6 +214,6 @@
 
   <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastUndo" hidden>元に戻す</button></div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

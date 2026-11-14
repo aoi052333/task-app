@@ -67,6 +67,7 @@ const ICONS = {
   right: '<path d="m9 18 6-6-6-6"/>',
   flag: '<path d="M4 22V4M4 4h13l-2 4 2 4H4"/>',
   alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/>',
+  paste: '<rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
   auto: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
 };
@@ -1093,6 +1094,8 @@ function closeComposer() {
 // 箇条書きの記号（・ - * 1. □ [ ] など）を取り除いて、空行を除いた行の一覧にする
 function bulkLines(text) {
   return text.split(/\r?\n/)
+    .filter(l => !/^\s*```/.test(l))           // ChatGPT のコードブロックの区切り
+    .map(l => l.replace(/\*\*/g, ''))           // 太字の記号
     .map(l => l.replace(/^\s*(?:[-*•・●○◯□☐■▪︎]|\[\s?[xX]?\s?\]|\d+[.)．）]|[（(]\d+[)）])\s*/, '').trim())
     .filter(Boolean);
 }
@@ -1112,6 +1115,7 @@ function setBulkMode(on, text) {
     setTimeout(() => { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }, 30);
   } else {
     $('#bulkInput').value = '';
+    $('#aiPanel').hidden = true;
   }
   updateBulkCount();
 }
@@ -1128,6 +1132,91 @@ $('#bulkInput').addEventListener('input', updateBulkCount);
 $('#bulkInput').addEventListener('keydown', e => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('#quickAdd').requestSubmit(); }
 });
+/* ---------- ChatGPT でまとめて追加用のテキストを作る ---------- */
+function buildAiPrompt() {
+  const theme = $('#aiTheme').value.trim();
+  const n = $('#aiCount').value;
+  const extra = $('#aiExtra').value.trim();
+  const d = new Date();
+  const todayStr = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${WEEKDAYS[d.getDay()]}）`;
+  return [
+    `次のテーマのタスクを${n}個、タスク管理アプリに一括登録できる形式で作ってください。`,
+    `テーマ：${theme}`,
+    extra ? `補足：${extra}` : '',
+    `今日は${todayStr}です。`,
+    '',
+    '【出力ルール】',
+    '・1行に1タスク。前置き・説明・見出し・番号・空行は付けず、タスクの行だけを出力する',
+    '・書式：タスク名 日付 時刻 !優先度 #プロジェクト @タグ（タスク名以外は、必要なものだけ付ける）',
+    '・日付：今日 / 明日 / 明後日 / 曜日1文字（例：金）/ 月/日（例：12/25）のどれか',
+    '・時刻：15:00 のような24時間表記',
+    '・優先度：!高 / !中 / !低',
+    '・プロジェクト：#名前（1つだけ。スペースなし）',
+    '・タグ：@名前（複数可。スペースなし）',
+    '・タスク名には「#」「@」「!」や時刻を含めない',
+    '',
+    '【例】',
+    '見積書を作成する 明日 10:00 !高 #仕事 @メール',
+    '牛乳を買う 金 #買い物',
+  ].filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n');
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    // クリップボードが使えない環境向けの予備の方法
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { /* 失敗 */ }
+    ta.remove();
+    return ok;
+  }
+}
+function aiReady() {
+  if ($('#aiTheme').value.trim()) return true;
+  $('#aiTheme').focus();
+  toast('どんなタスクを作るか入力してください');
+  return false;
+}
+$('#aiOpenBtn').addEventListener('click', () => {
+  const p = $('#aiPanel');
+  p.hidden = !p.hidden;
+  if (!p.hidden) setTimeout(() => $('#aiTheme').focus(), 30);
+});
+$('#aiCloseBtn').addEventListener('click', () => { $('#aiPanel').hidden = true; });
+$('#aiTheme').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); $('#aiGoBtn').click(); }
+});
+$('#aiGoBtn').addEventListener('click', async () => {
+  if (!aiReady()) return;
+  const prompt = buildAiPrompt();
+  // 依頼文を入れた状態で ChatGPT を開く（念のためクリップボードにもコピー）
+  const win = window.open('https://chatgpt.com/?q=' + encodeURIComponent(prompt), '_blank', 'noopener');
+  await copyText(prompt);
+  toast(win === null ? '依頼文をコピーしました。ChatGPT に貼り付けて送信してください' : 'ChatGPT を開きました（依頼文はコピー済み）');
+});
+$('#aiCopyBtn').addEventListener('click', async () => {
+  if (!aiReady()) return;
+  toast(await copyText(buildAiPrompt()) ? '依頼文をコピーしました。ChatGPT に貼り付けて送信してください' : 'コピーできませんでした');
+});
+$('#pasteBtn').addEventListener('click', async () => {
+  let text = '';
+  try { text = await navigator.clipboard.readText(); } catch { /* 許可されなかった場合 */ }
+  const input = $('#bulkInput');
+  if (!text) {
+    input.focus();
+    toast('入力欄を長押し（Mac は ⌘V）で貼り付けてください');
+    return;
+  }
+  const cur = input.value.replace(/\s+$/, '');
+  input.value = (cur ? cur + '\n' : '') + text.trim() + '\n';
+  updateBulkCount();
+  $('#aiPanel').hidden = true;
+  const n = bulkLines(input.value).length;
+  toast(`${n}件を読み込みました。内容を確認して「${n}件を追加」を押してください`);
+});
+
 // 複数行のテキストを貼り付けたら、自動でまとめて追加に切り替える
 $('#quickInput').addEventListener('paste', e => {
   const text = e.clipboardData?.getData('text') || '';
