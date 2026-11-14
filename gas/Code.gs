@@ -5,6 +5,7 @@
  *   - Webアプリから送られたタスクを Google スプレッドシートに保存し、全件を返す（Mac ⇄ iPhone 同期）
  *   - 期限のあるタスクを Google カレンダーの「タスク」カレンダーに登録する（通知ONならリマインダー付き）
  *   - Google カレンダーの予定（今日から2週間分）をアプリに返す
+ *   - 15分ごとに Gmail を調べ、返信が必要なメールをタスクにする（返信すると自動で完了）
  *
  * 初回だけやること:
  *   1. エディタ上部の関数選択で「setup」を選んで ▶ 実行（権限の確認が出たら許可）
@@ -46,8 +47,16 @@ function setup() {
   }
 
   const cal = getTaskCalendar();
+
+  // 15分ごとに Gmail をチェックするトリガー
+  const hasTrigger = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === 'checkGmail';
+  });
+  if (!hasTrigger) ScriptApp.newTrigger('checkGmail').timeBased().everyMinutes(15).create();
+
   Logger.log('スプレッドシート: https://docs.google.com/spreadsheets/d/' + ssId);
   Logger.log('タスク用カレンダー: ' + cal.getName());
+  Logger.log('Gmail の自動チェック: 15分ごと（新規 ' + checkGmail() + ' 件）');
   Logger.log('トークン（アプリの設定に入力）: ' + token);
 }
 
@@ -67,6 +76,8 @@ function doPost(e) {
     switch (body.action) {
       case 'ping':
         return json({ ok: true });
+      case 'checkGmail':
+        return json({ ok: true, added: checkGmail() });
       case 'sync': {
         const result = { ok: true, tasks: syncTasks(body.changes || []) };
         try {
@@ -269,6 +280,115 @@ function getEvents() {
 
   try { cache.put('events', JSON.stringify(events), EVENT_CACHE_SECONDS); } catch (err) { /* 大きすぎる場合は保存しない */ }
   return events;
+}
+
+/* =========================================================
+   Gmail 連携: 返信が必要なメールをタスクにする
+   ========================================================= */
+
+const GMAIL_QUERY = 'in:inbox newer_than:7d -from:me -category:promotions -category:social -category:updates -category:forums -label:返信不要';
+const GMAIL_MAX_THREADS = 40;
+// 自動送信らしい差出人
+const NOREPLY_PATTERN = /(no-?reply|do-?not-?reply|notification|notify|mailer-daemon|postmaster|bounce|newsletter|magazine|^news@)/i;
+
+/**
+ * 受信トレイを調べて、返信が必要なメールをタスクとして追加する。
+ * あわせて、返信済みになったメールのタスクを自動で完了にする。
+ * 戻り値: 新しく追加したタスクの数
+ *
+ * 判定ルール（すべて満たすもの）:
+ *   - 受信トレイにあり、7日以内、プロモーション等のカテゴリではない
+ *   - スレッドの最後のメールが自分以外から（＝まだ返信していない）
+ *   - 自分が To か Cc に入っている
+ *   - メーリングリスト・一斉配信・自動送信ではない
+ *   - Gmail で「返信不要」ラベルが付いていない
+ */
+function checkGmail() {
+  const me = myAddresses();
+  const tasks = readRows(getSheet()).map(function (r) { return r.task; });
+  const byThread = {};
+  tasks.forEach(function (t) {
+    if (t.source === 'gmail' && t.sourceId) {
+      (byThread[t.sourceId] = byThread[t.sourceId] || []).push(t);
+    }
+  });
+
+  const now = new Date().toISOString();
+  const changes = [];
+  let added = 0;
+
+  // 1) 返信が必要なメールを探す
+  GmailApp.search(GMAIL_QUERY, 0, GMAIL_MAX_THREADS).forEach(function (thread) {
+    const msgs = thread.getMessages();
+    const last = msgs[msgs.length - 1];
+    if (!needsReply(last, me)) return;
+
+    const existing = byThread[thread.getId()] || [];
+    // 未完了のタスクがある、または同じメールのタスクを完了済み → 追加しない
+    if (existing.some(function (t) { return !t.deleted && !t.done; })) return;
+    if (existing.some(function (t) { return t.sourceMessageId === last.getId(); })) return;
+
+    const from = last.getFrom();
+    const body = last.getPlainBody().replace(/\s+/g, ' ').trim().slice(0, 200);
+    changes.push({
+      id: Utilities.getUuid().replace(/-/g, '').slice(0, 16),
+      title: '返信: ' + (thread.getFirstMessageSubject() || '(件名なし)'),
+      notes: '差出人: ' + from + '\n' + body,
+      due: '', dueTime: '', priority: 0, project: '', tags: [], repeat: 'none', notify: false,
+      done: false, doneAt: null, deleted: false,
+      source: 'gmail', sourceId: thread.getId(), sourceMessageId: last.getId(),
+      sourceUrl: 'https://mail.google.com/mail/u/0/#all/' + thread.getId(),
+      receivedAt: last.getDate().toISOString(),
+      createdAt: now, updatedAt: now,
+    });
+    added++;
+  });
+
+  // 2) 返信済みになったメールのタスクを自動で完了にする
+  tasks.forEach(function (t) {
+    if (t.source !== 'gmail' || t.done || t.deleted || !t.sourceId) return;
+    let thread = null;
+    try { thread = GmailApp.getThreadById(t.sourceId); } catch (err) { /* 削除済みなど */ }
+    if (!thread) return;
+    const msgs = thread.getMessages();
+    const last = msgs[msgs.length - 1];
+    if (isFromMe(last, me) || thread.isInTrash()) {
+      changes.push(Object.assign({}, t, { done: true, doneAt: now, updatedAt: now }));
+    }
+  });
+
+  if (changes.length) syncTasks(changes);
+  return added;
+}
+
+function myAddresses() {
+  const list = [Session.getEffectiveUser().getEmail()].concat(GmailApp.getAliases());
+  return list.map(function (a) { return a.toLowerCase(); });
+}
+
+function emailOf(s) {
+  const m = String(s || '').match(/<([^>]+)>/);
+  return (m ? m[1] : String(s || '')).trim().toLowerCase();
+}
+
+function isFromMe(msg, me) {
+  return me.indexOf(emailOf(msg.getFrom())) >= 0;
+}
+
+function needsReply(msg, me) {
+  if (isFromMe(msg, me)) return false;
+  const from = emailOf(msg.getFrom());
+  if (NOREPLY_PATTERN.test(from)) return false;
+
+  const recipients = (msg.getTo() + ',' + msg.getCc()).toLowerCase();
+  if (!me.some(function (a) { return recipients.indexOf(a) >= 0; })) return false;
+
+  // 一斉配信・自動送信のヘッダー
+  if (msg.getHeader('List-Unsubscribe') || msg.getHeader('List-Id')) return false;
+  if (/bulk|list|junk/i.test(msg.getHeader('Precedence'))) return false;
+  const auto = msg.getHeader('Auto-Submitted');
+  if (auto && !/^no$/i.test(auto)) return false;
+  return true;
 }
 
 function json(obj) {

@@ -193,6 +193,10 @@ function persist() {
 const live = () => state.tasks.filter(t => !t.deleted);
 const open = () => live().filter(t => !t.done);
 
+// 返信が必要なメールのタスク（新しく届いた順）
+const mailTasks = () => open().filter(x => x.source === 'gmail')
+  .sort((a, b) => (b.receivedAt || b.createdAt).localeCompare(a.receivedAt || a.createdAt));
+
 function sortTasks(list) {
   return list.slice().sort((a, b) =>
     (a.due || '9999').localeCompare(b.due || '9999') ||
@@ -218,10 +222,14 @@ function eventsOn(date) {
 
 function groupsForView(view) {
   const t = today();
+  if (view === 'mail') {
+    return [{ title: '', items: mailTasks() }];
+  }
   if (view === 'today') {
     const list = open().filter(x => x.due && x.due <= t);
     return [
       { title: '今日の予定', items: eventsOn(t) },
+      { title: '要返信メール', items: mailTasks().filter(x => !x.due) },
       { title: '期限切れ', cls: 'overdue', items: sortTasks(list.filter(x => x.due < t)) },
       { title: '今日のタスク', items: sortTasks(list.filter(x => x.due === t)) },
     ];
@@ -261,7 +269,7 @@ function groupsForView(view) {
 function viewTitle(view) {
   if (view.startsWith('project:')) return '# ' + view.slice(8);
   if (view.startsWith('tag:')) return '@ ' + view.slice(4);
-  return { today: '今日', upcoming: '予定', all: 'すべて', done: '完了', settings: '設定' }[view] || '';
+  return { today: '今日', mail: '要返信', upcoming: '予定', all: 'すべて', done: '完了', settings: '設定' }[view] || '';
 }
 
 /* ---------- 描画 ---------- */
@@ -276,6 +284,7 @@ function render() {
     today: open().filter(x => x.due && x.due <= t).length,
     upcoming: open().filter(x => x.due && x.due > t).length,
     all: open().length,
+    mail: mailTasks().length,
   };
   document.querySelectorAll('[data-count]').forEach(el => { el.textContent = counts[el.dataset.count] || ''; });
 
@@ -285,7 +294,8 @@ function render() {
   const isSettings = view === 'settings';
   $('#settings').hidden = !isSettings;
   $('#list').hidden = isSettings;
-  $('#quickAdd').hidden = isSettings || view === 'done';
+  $('#quickAdd').hidden = isSettings || view === 'done' || view === 'mail';
+  $('#mailBar').hidden = view !== 'mail';
   if (isSettings) {
     // 入力途中の内容を消さないよう、設定画面は開いたときに一度だけ描画する
     if (!$('#settings').hasChildNodes()) renderSettings();
@@ -295,7 +305,8 @@ function render() {
 
   const groups = groupsForView(view).filter(g => g.items.length);
   if (!groups.length) {
-    $('#list').innerHTML = `<div class="empty">${view === 'today' ? '今日のタスクはありません 🎉' : 'タスクはありません'}</div>`;
+    const msg = { today: '今日のタスクはありません 🎉', mail: '返信が必要なメールはありません 🎉' }[view] || 'タスクはありません';
+    $('#list').innerHTML = `<div class="empty">${msg}</div>`;
     return;
   }
   $('#list').innerHTML = groups.map(g => `
@@ -321,7 +332,12 @@ function taskHtml(x) {
   if (x.due) meta.push(`<span class="${!x.done && x.due < t ? 'overdue' : ''}">📅 ${esc(formatDue(x.due, x.dueTime))}</span>`);
   if (x.repeat && x.repeat !== 'none') meta.push(`<span>🔁 ${REPEAT_LABEL[x.repeat]}</span>`);
   if (x.priority) meta.push(`<span>優先度:${PRIORITY_LABEL[x.priority]}</span>`);
-  if (x.source === 'gmail') meta.push(`<span>✉️ 要返信</span>`);
+  if (x.source === 'gmail') {
+    const d = x.receivedAt ? new Date(x.receivedAt) : null;
+    const when = d ? ` ${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}受信` : '';
+    meta.push(`<span>✉️ 要返信${esc(when)}</span>`);
+    if (x.sourceUrl) meta.push(`<a href="${esc(x.sourceUrl)}" target="_blank" rel="noopener">Gmailで開く ↗</a>`);
+  }
   if (x.project && !state.view.startsWith('project:')) meta.push(`<span class="chip"># ${esc(x.project)}</span>`);
   for (const tag of x.tags) meta.push(`<span class="chip">@ ${esc(tag)}</span>`);
   return `
@@ -376,6 +392,15 @@ function renderSettings() {
     <h3>バックアップ</h3>
     <p>すべてのタスクを JSON ファイルとして書き出します。</p>
     <div class="btn-row"><button class="btn secondary" id="exportBtn">書き出す</button></div>
+
+    <h3>要返信メールの判定ルール</h3>
+    <p>
+      Gmail の受信トレイ（7日以内）から、次の条件をすべて満たすメールを「要返信」として追加します。返信すると自動で完了になります。<br>
+      ・自分が To か Cc に入っていて、まだ返信していない<br>
+      ・プロモーション／ソーシャル／新着／フォーラムのカテゴリではない<br>
+      ・メルマガ・一斉配信・自動送信（no-reply など）ではない<br>
+      対象にしたくないメールは、Gmail で「<strong>返信不要</strong>」というラベルを付けると除外されます。
+    </p>
 
     <h3>クイック追加の書き方</h3>
     <p>
@@ -516,6 +541,7 @@ function setView(view) {
 document.addEventListener('click', e => {
   const nav = e.target.closest('.nav-item');
   if (nav) { setView(nav.dataset.view); return; }
+  if (e.target.closest('.task a')) return; // 「Gmailで開く」はそのままリンクを開く
   const act = e.target.closest('[data-action]');
   if (act) {
     const id = act.closest('.task').dataset.id;
@@ -530,6 +556,24 @@ document.addEventListener('click', e => {
 });
 
 $('#menuBtn').addEventListener('click', () => $('#nav').classList.toggle('open'));
+
+$('#checkMailBtn').addEventListener('click', async () => {
+  if (!state.config.apiUrl) { toast('先に「設定」で同期を設定してください'); return; }
+  const btn = $('#checkMailBtn');
+  btn.disabled = true;
+  btn.textContent = '確認中…';
+  try {
+    const res = await api({ action: 'checkGmail' });
+    if (!res.ok) throw new Error(res.error);
+    toast(res.added ? `${res.added}件の要返信メールを追加しました` : '新しい要返信メールはありません');
+    await sync();
+  } catch (e) {
+    toast('確認できませんでした: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '今すぐ確認';
+  }
+});
 
 $('#quickAdd').addEventListener('submit', e => {
   e.preventDefault();

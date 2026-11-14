@@ -114,6 +114,14 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .event-title { flex: 1; min-width: 0; word-break: break-word; }
 .event-cal { color: var(--muted); font-size: 12px; flex-shrink: 0; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.mail-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 0 24px 8px; font-size: 13px; color: var(--muted);
+}
+.mail-bar[hidden] { display: none; }
+.task-meta a { color: var(--accent); text-decoration: none; }
+@media (max-width: 760px) { .mail-bar { margin: 0 16px 8px; } }
+
 /* 編集シート */
 .sheet-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex;
