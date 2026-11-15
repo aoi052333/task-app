@@ -448,7 +448,8 @@ function syncGoogleTask(listId, row, full) {
 const GMAIL_QUERY = 'in:inbox newer_than:7d -from:me -category:promotions -category:social -category:updates -category:forums -label:返信不要';
 const GMAIL_MAX_THREADS = 40;
 // 自動送信らしい差出人
-const NOREPLY_PATTERN = /(no-?reply|do-?not-?reply|notification|notify|mailer-daemon|postmaster|bounce|newsletter|magazine|^news@)/i;
+// 区切りが「-」「_」「.」のどれでも、区切りなしでも一致する（no-reply / no_reply / noreply / do_not_reply など）
+const NOREPLY_PATTERN = /(no[-_.]?reply|do[-_.]?not[-_.]?reply|notification|notify|mailer[-_.]?daemon|postmaster|bounce|newsletter|magazine|^news@)/i;
 
 /**
  * 受信トレイを調べて、返信が必要なメールをタスクとして追加する。
