@@ -683,6 +683,7 @@ function renderSettings() {
       <div class="btn-row">
         <button class="btn" id="cfgSave">保存して同期</button>
         <button class="btn ghost" id="cfgTest">接続テスト</button>
+        <button class="btn ghost" id="openGuideBtn">設定の案内を開く</button>
       </div>
     </div>
 
@@ -733,16 +734,10 @@ function renderSettings() {
     </div>`;
   applyTheme(getTheme()); // 配色ボタンの選択状態を反映
   $('#cfgSave').onclick = () => {
-    state.config = { apiUrl: $('#cfgUrl').value.trim(), token: $('#cfgToken').value.trim() };
-    save(LS.config, state.config);
-    state.syncError = null;
-    // 初回接続時は端末内のタスクをすべて送る
-    const ids = new Set(state.pending.map(t => t.id));
-    for (const t of state.tasks) if (!ids.has(t.id)) state.pending.push(t);
-    persist();
+    saveSyncConfig($('#cfgUrl').value, $('#cfgToken').value);
     toast('保存しました');
-    sync();
   };
+  $('#openGuideBtn').onclick = () => openOnboarding(1);
   $('#cfgTest').onclick = async () => {
     try {
       const res = await api({ action: 'ping' }, { apiUrl: $('#cfgUrl').value.trim(), token: $('#cfgToken').value.trim() });
@@ -765,6 +760,18 @@ function renderSettings() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
+}
+
+/* ---------- 同期設定の保存 ---------- */
+function saveSyncConfig(url, token) {
+  state.config = { apiUrl: url.trim(), token: token.trim() };
+  save(LS.config, state.config);
+  state.syncError = null;
+  // 初回接続時は端末内のタスクをすべて送る
+  const ids = new Set(state.pending.map(t => t.id));
+  for (const t of state.tasks) if (!ids.has(t.id)) state.pending.push(t);
+  persist();
+  sync();
 }
 
 /* ---------- テストデータ ---------- */

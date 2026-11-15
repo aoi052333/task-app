@@ -549,3 +549,61 @@ kbd { font-family: inherit; font-size: 10.5px; color: var(--muted); border: 1px 
   .sheet-grabber { display: block; width: 36px; height: 4px; border-radius: 999px; background: var(--line-2); margin: 8px auto -4px; flex-shrink: 0; }
   .sheet-head { padding-top: 10px; }
 }
+
+/* ---------- 初回設定の案内 ---------- */
+.onboard {
+  position: fixed; inset: 0; z-index: 60; background: rgba(12, 10, 9, .45);
+  display: flex; align-items: center; justify-content: center; padding: 20px; animation: fade .15s;
+}
+.onboard[hidden] { display: none; }
+body.ob-open { overflow: hidden; }
+.ob-card {
+  width: 100%; max-width: 580px; max-height: 100%; display: flex; flex-direction: column;
+  background: var(--surface); border-radius: 14px; box-shadow: var(--shadow-pop); animation: pop .18s cubic-bezier(.2,.8,.2,1);
+}
+.ob-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 0; min-height: 36px; }
+.ob-progress { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.ob-progress i { width: 22px; height: 4px; border-radius: 999px; background: var(--line); }
+.ob-progress i.done { background: var(--text-2); }
+.ob-progress i.on { background: var(--accent); }
+.ob-progress span { margin-left: 6px; }
+.ob-skip { font-size: 12.5px; margin-left: auto; }
+.ob-title { font-size: 20px; letter-spacing: -.02em; margin: 10px 20px 4px; }
+.ob-body { padding: 4px 20px 8px; overflow-y: auto; font-size: 14px; line-height: 1.75; color: var(--text); }
+.ob-lead { margin: 4px 0 12px; color: var(--text-2); }
+.ob-features { list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-direction: column; gap: 8px; }
+.ob-features li { display: flex; gap: 10px; align-items: flex-start; }
+.ob-features li > [data-icon] { color: var(--accent); margin-top: 4px; flex-shrink: 0; }
+.ob-list { margin: 4px 0 12px; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
+.ob-list li::marker { font-weight: 700; color: var(--accent); }
+.ob-list.small { font-size: 13px; gap: 4px; margin-bottom: 4px; }
+.ob-sub { font-size: 12.5px; color: var(--text-2); }
+.ob-sub a, .ob-body a:not(.btn) { color: var(--accent-text); }
+.ob-action { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.ob-action .btn { text-decoration: none; }
+.ob-status { font-size: 12.5px; color: var(--text-2); }
+.ob-status.ok { color: var(--success); font-weight: 600; }
+.ob-status.err { color: var(--danger); font-weight: 600; }
+.ob-note { font-size: 12.5px; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; margin: 4px 0 8px; line-height: 1.7; }
+.ob-details { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 12px; margin: 6px 0; font-size: 13px; }
+.ob-details summary { cursor: pointer; font-weight: 600; color: var(--text-2); }
+.ob-details[open] summary { margin-bottom: 6px; }
+.ob-table { border-collapse: collapse; margin: 6px 0 2px; font-size: 13px; }
+.ob-table th, .ob-table td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; }
+.ob-table th { font-weight: 500; color: var(--text-2); background: var(--surface-2); }
+.ob-body code { font-size: 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; word-break: break-all; }
+.ob-body kbd { font-size: 11.5px; padding: 1px 6px; line-height: 18px; color: var(--text); background: var(--surface-2); }
+.ob-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 10px; }
+.ob-field input { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 9px 11px; font-size: 15px; font-weight: 400; color: var(--text); background: var(--surface); }
+.ob-field input:focus { border-color: var(--text-2); }
+.ob-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.ob-foot .btn:only-child { margin-left: auto; }
+.ob-foot .btn.ghost { order: -1; }
+@media (max-width: 760px) {
+  .onboard { padding: 0; align-items: stretch; }
+  .ob-card { max-width: none; height: 100%; border-radius: 0; padding-top: env(safe-area-inset-top); }
+  .ob-body { flex: 1; }
+  .ob-foot { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  .ob-foot .btn { flex: 1; }
+  .ob-foot .btn.ghost { order: 2; flex-basis: 100%; }
+}
