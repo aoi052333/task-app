@@ -664,7 +664,8 @@ function renderSyncStatus() {
   if (state.syncing) { el.textContent = '同期中…'; return; }
   if (state.syncError) { el.classList.add('err'); el.textContent = '同期エラー: ' + state.syncError; return; }
   const pend = (state.pending.length ? `・未送信 ${state.pending.length}件` : '') +
-    (state.eventsError ? '・予定の取得に失敗' : '');
+    (state.eventsError ? '・予定の取得に失敗' : '') +
+    (state.gtasksError ? '・Google ToDo への転記に失敗' : '');
   if (state.lastSync) el.classList.add('ok');
   el.textContent = state.lastSync
     ? `同期済み ${state.lastSync.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}${pend}`
@@ -878,6 +879,7 @@ async function sync() {
       save(LS.events, state.events);
     }
     state.eventsError = res.eventsError || null;
+    state.gtasksError = res.gtasksError || null;
     state.lastSync = new Date();
     state.syncError = null;
     persist();

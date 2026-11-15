@@ -6,6 +6,8 @@
  *   - 期限のあるタスクを Google カレンダーの「タスク」カレンダーに登録する（通知ONならリマインダー付き）
  *   - Google カレンダーの予定（今日から2週間分）をアプリに返す
  *   - 15分ごとに Gmail を調べ、返信が必要なメールをタスクにする（返信すると自動で完了）
+ *   - タスクを Google ToDo リストの「タスク管理アプリ」リストに転記する（スマホのウィジェット表示用・一方向）
+ *     ※ エディタ左の「サービス」＋ から「Google Tasks API」を追加しておく必要がある
  *
  * 初回だけやること:
  *   1. エディタ上部の関数選択で「setup」を選んで ▶ 実行（権限の確認が出たら許可）
@@ -21,7 +23,8 @@
  */
 
 const SHEET_NAME = 'tasks';
-const HEADER = ['id', 'updatedAt', 'json', 'eventId', 'eventSig'];
+const HEADER = ['id', 'updatedAt', 'json', 'eventId', 'eventSig', 'gtaskId', 'gtaskSig'];
+const GTASK_LIST_NAME = 'タスク管理アプリ';
 const TASK_CALENDAR_NAME = 'タスク';
 const EVENT_DAYS = 15;          // 何日先までの予定を返すか
 const EVENT_CACHE_SECONDS = 60;  // 予定の一時保存時間（1分）
@@ -56,6 +59,7 @@ function setup() {
 
   Logger.log('スプレッドシート: https://docs.google.com/spreadsheets/d/' + ssId);
   Logger.log('タスク用カレンダー: ' + cal.getName());
+  Logger.log('Google ToDo リスト: ' + (hasTasksService() ? GTASK_LIST_NAME + '（' + getTaskListId() + '）' : '未接続（サービスに Google Tasks API を追加してください）'));
   Logger.log('Gmail の自動チェック: 15分ごと（新規 ' + checkGmail() + ' 件）');
   Logger.log('トークン（アプリの設定に入力）: ' + token);
 }
@@ -80,6 +84,8 @@ function doPost(e) {
         return json({ ok: true, added: checkGmail() });
       case 'sync': {
         const result = { ok: true, tasks: syncTasks(body.changes || []) };
+        const gErr = PropertiesService.getScriptProperties().getProperty('GTASKS_ERROR');
+        if (gErr) result.gtasksError = gErr;
         try {
           result.events = getEvents();
         } catch (err) {
@@ -121,7 +127,7 @@ function syncTasks(changes) {
       const i = index[task.id];
       if (i === undefined) {
         index[task.id] = rows.length;
-        rows.push({ id: task.id, updatedAt: task.updatedAt, task: task, eventId: '', eventSig: '', dirty: true });
+        rows.push({ id: task.id, updatedAt: task.updatedAt, task: task, eventId: '', eventSig: '', gtaskId: '', gtaskSig: '', dirty: true });
       } else if (String(task.updatedAt) >= String(rows[i].updatedAt)) {
         rows[i].updatedAt = task.updatedAt;
         rows[i].task = task;
@@ -139,6 +145,9 @@ function syncTasks(changes) {
       if (fullSync || r.dirty) syncEvent(cal, r);
     });
     if (fullSync) props.setProperty('CALENDAR_SYNCED', '1');
+
+    // Google ToDo リストへの転記（失敗してもアプリの同期は止めない）
+    syncGoogleTasks(rows);
 
     // 削除から30日以上たったタスクは完全に消す（シートの肥大化防止）
     const limit = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
@@ -168,7 +177,8 @@ function readRows(sheet) {
     .map(function (v) {
       return {
         id: String(v[0]), updatedAt: String(v[1]), task: JSON.parse(v[2]),
-        eventId: String(v[3] || ''), eventSig: String(v[4] || ''), dirty: false,
+        eventId: String(v[3] || ''), eventSig: String(v[4] || ''),
+        gtaskId: String(v[5] || ''), gtaskSig: String(v[6] || ''), dirty: false,
       };
     });
 }
@@ -178,7 +188,7 @@ function writeRows(sheet, rows) {
   if (last > 1) sheet.getRange(2, 1, last - 1, HEADER.length).clearContent();
   if (!rows.length) return;
   sheet.getRange(2, 1, rows.length, HEADER.length).setValues(rows.map(function (r) {
-    return [r.id, r.updatedAt, JSON.stringify(r.task), r.eventId, r.eventSig];
+    return [r.id, r.updatedAt, JSON.stringify(r.task), r.eventId, r.eventSig, r.gtaskId || '', r.gtaskSig || ''];
   }));
 }
 
@@ -339,6 +349,96 @@ function getEvents() {
 
   try { cache.put('events', JSON.stringify(events), EVENT_CACHE_SECONDS); } catch (err) { /* 大きすぎる場合は保存しない */ }
   return events;
+}
+
+/* =========================================================
+   Google ToDo リスト（Google Tasks）への転記
+   ========================================================= */
+
+function hasTasksService() {
+  return typeof Tasks !== 'undefined';
+}
+
+/** 転記先のリスト（なければ作る） */
+function getTaskListId() {
+  const props = PropertiesService.getScriptProperties();
+  let id = props.getProperty('GTASK_LIST_ID');
+  if (id) {
+    try { Tasks.Tasklists.get(id); return id; } catch (err) { id = null; }
+  }
+  const list = Tasks.Tasklists.insert({ title: GTASK_LIST_NAME });
+  props.setProperty('GTASK_LIST_ID', list.id);
+  props.deleteProperty('GTASKS_SYNCED'); // 新しいリストには全件を転記し直す
+  return list.id;
+}
+
+function syncGoogleTasks(rows) {
+  const props = PropertiesService.getScriptProperties();
+  if (!hasTasksService()) return;
+  try {
+    const listId = getTaskListId();
+    const full = props.getProperty('GTASKS_SYNCED') !== '1';
+    rows.forEach(function (r) {
+      if (full || r.dirty) syncGoogleTask(listId, r, full);
+    });
+    if (full) props.setProperty('GTASKS_SYNCED', '1');
+    props.deleteProperty('GTASKS_ERROR');
+  } catch (err) {
+    props.setProperty('GTASKS_ERROR', String(err && err.message || err).slice(0, 200));
+  }
+}
+
+/**
+ * タスク1件を Google ToDo に反映する。
+ *   - 未完了 → 追加・更新
+ *   - 完了   → 完了にする（まだ転記していない完了済みタスクは転記しない）
+ *   - 削除   → 削除する
+ */
+function syncGoogleTask(listId, row, full) {
+  const t = row.task;
+  const want = !t.deleted && !(t.done && !row.gtaskId);
+  const sig = want ? JSON.stringify([t.title, t.notes, t.due, t.dueTime, t.priority, t.project, !!t.done]) : '';
+  if (sig === row.gtaskSig && (!want || row.gtaskId)) return;
+
+  if (!want) {
+    if (row.gtaskId) {
+      try { Tasks.Tasks.remove(listId, row.gtaskId); } catch (err) { /* すでに削除済みなど */ }
+    }
+    row.gtaskId = '';
+    row.gtaskSig = '';
+    row.dirty = true;
+    return;
+  }
+
+  const PRIORITY = { 1: '低', 2: '中', 3: '高' };
+  const info = [];
+  if (t.dueTime) info.push('⏰ ' + t.dueTime);
+  if (t.priority) info.push('優先度 ' + PRIORITY[t.priority]);
+  if (t.project) info.push('#' + t.project);
+  if (t.source === 'gmail') info.push('✉️ 要返信');
+  const notes = [info.join('  '), t.notes || '', t.sourceUrl || ''].filter(String).join('\n');
+  const resource = {
+    title: (t.priority === 3 ? '❗' : '') + t.title,
+    notes: notes,
+    status: t.done ? 'completed' : 'needsAction',
+  };
+  if (t.due) resource.due = t.due + 'T00:00:00.000Z';
+
+  if (row.gtaskId) {
+    try {
+      // 期限を外した場合も反映できるよう、まるごと置き換える
+      resource.id = row.gtaskId;
+      Tasks.Tasks.update(resource, listId, row.gtaskId);
+    } catch (err) {
+      row.gtaskId = '';
+      delete resource.id;
+    }
+  }
+  if (!row.gtaskId) {
+    row.gtaskId = Tasks.Tasks.insert(resource, listId).id;
+  }
+  row.gtaskSig = sig;
+  row.dirty = true;
 }
 
 /* =========================================================
