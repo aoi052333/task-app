@@ -1,8 +1,8 @@
 // オフラインでも画面を開けるようにするための Service Worker
 // アプリを更新したら VERSION の数字を上げる（index.html の ?v= も合わせる）
-const VERSION = 'v17';
+const VERSION = 'v18';
 const CACHE = 'taskapp-' + VERSION;
-const FILES = ['./', 'index.html', 'style.css?v=17', 'app.js?v=17', 'onboarding.js?v=17', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/favicon.svg', 'icons/favicon-32.png'];
+const FILES = ['./', 'index.html', 'style.css?v=18', 'app.js?v=18', 'onboarding.js?v=18', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/favicon.svg', 'icons/favicon-32.png'];
 
 self.addEventListener('install', e => {
   // ブラウザの一時保存を使わず、必ずサーバーから最新を取得してキャッシュする
