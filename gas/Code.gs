@@ -250,6 +250,7 @@ function createEvent(cal, t) {
 /**
  * Google カレンダーの「タスク」カレンダーで日時やタイトルを変えた場合に、タスク側へ反映する（双方向同期）。
  *   - 予定の日付・時刻・タイトルがタスクと違っていれば、タスクを予定に合わせる
+ *   - 予定が削除されていれば、タスクも削除する
  *   - 予定をまとめて1回で取得するので、タスクが多くても遅くならない
  */
 function pullCalendarEdits(cal, rows) {
@@ -263,8 +264,20 @@ function pullCalendarEdits(cal, rows) {
 
   targets.forEach(function (r) {
     const ev = events[r.eventId];
-    if (!ev) return; // 範囲外、またはカレンダー側で削除された予定はそのまま
     const t = r.task;
+    if (!ev) {
+      // 一覧に無い予定は、個別にも確認して本当に削除されていたらタスクも削除する
+      let found = null;
+      try { found = cal.getEventById(r.eventId); } catch (err) { found = null; }
+      if (found) return; // 取得範囲の外にあるだけ
+      const removed = Object.assign({}, t, { deleted: true, updatedAt: new Date().toISOString() });
+      r.task = removed;
+      r.updatedAt = removed.updatedAt;
+      r.eventId = '';
+      r.eventSig = '';
+      r.dirty = true;
+      return;
+    }
     let due, time;
     if (ev.isAllDayEvent()) {
       due = Utilities.formatDate(ev.getAllDayStartDate(), tz, 'yyyy-MM-dd');
