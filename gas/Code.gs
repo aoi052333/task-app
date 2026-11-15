@@ -258,18 +258,21 @@ function pullCalendarEdits(cal, rows) {
   if (!targets.length) return;
   const tz = Session.getScriptTimeZone();
   const now = new Date();
+  const from = new Date(now.getTime() - 400 * 86400000);
+  const to = new Date(now.getTime() + 1100 * 86400000);
+  const fromStr = Utilities.formatDate(from, tz, 'yyyy-MM-dd');
+  const toStr = Utilities.formatDate(to, tz, 'yyyy-MM-dd');
   const events = {};
-  cal.getEvents(new Date(now.getTime() - 120 * 86400000), new Date(now.getTime() + 730 * 86400000))
-    .forEach(function (ev) { events[ev.getId()] = ev; });
+  // 削除された予定はこの一覧に含まれない
+  cal.getEvents(from, to).forEach(function (ev) { events[ev.getId()] = ev; });
 
   targets.forEach(function (r) {
     const ev = events[r.eventId];
     const t = r.task;
     if (!ev) {
-      // 一覧に無い予定は、個別にも確認して本当に削除されていたらタスクも削除する
-      let found = null;
-      try { found = cal.getEventById(r.eventId); } catch (err) { found = null; }
-      if (found) return; // 取得範囲の外にあるだけ
+      // 取得期間の内側の予定なのに一覧に無い ＝ カレンダー側で削除された → タスクも削除する
+      // （期間の外側の予定は判定できないので、そのままにする）
+      if (!t.due || t.due < fromStr || t.due > toStr) return;
       const removed = Object.assign({}, t, { deleted: true, updatedAt: new Date().toISOString() });
       r.task = removed;
       r.updatedAt = removed.updatedAt;
